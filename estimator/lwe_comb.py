@@ -12,51 +12,55 @@ from .lwe_parameters import LWEParameters
 from .prob import amplify as prob_amplify
 
 
+def log_comb(n, *L):
+    """
+    Returns log(n! / (L[0]! L[1]! ... L[-1]!)), where sum(L) <= n.
+    This is the number of ways to arrange `n` balls s.t. L[i] balls have colour i (i=0,1,...).
+    EXAMPLE::
+
+        >>> from estimator.lwe_comb import log_comb
+        >>> log_comb(10, 3)
+        4.78749...
+        >>> log_comb(10, 3, 3)
+        8.34283...
+
+    """
+    assert sum(L) <= n
+    res = 0.0
+    for x in L:
+        res += log(binomial(n, x))
+        n -= x
+    return RR(res)
+
+
+def sum_log(*L):
+    """
+    Return `log(sum(exp(x) for x in L))`, but without causing numerical issues.
+    In particular, we use:
+        `log(a_1 + ... + a_n)` = log(a_1) + log(1 + a_2/a_1 + ... + a_n/a_1)
+                               = log(a_1) + log(sum(exp(log(a_i) - log(a_1)) for i=1,...,n)),
+    when the input is `log(a_1), ..., log(a_n)`, and a_1 is maximal.
+    """
+    assert L
+    if len(L) == 1:
+        return L[0]
+
+    max_L = max(L)
+    return max_L + log(sum(exp(x - max_L) for x in L))
+
+
+def split_up(n):
+    """
+    Split up `n` evenly is: one equals `ceil(n / 2)`, and the other `floor(n / 2)`.
+    :return: pair (a, b) such that a + b = n.
+    """
+    return (n + 1) // 2, n // 2
+
+
 class CombinatorialMeet:
     """
     Estimate cost of solving LWE via MeetLWE [May21]_, using the Rep-0 representation techniques.
     """
-    def log_comb(n, *L):
-        """
-        Returns log(n! / (L[0]! L[1]! ... L[-1]!)), where sum(L) <= n.
-        This is the number of ways to arrange `n` balls s.t. L[i] balls have colour i (i=0,1,...).
-        EXAMPLE::
-
-            >>> log_comb(10, 3)
-            4.78749...
-            >>> log_comb(10, 3, 3)
-            8.34283...
-
-        """
-        assert sum(L) <= n
-        res = 0.0
-        for x in L:
-            res += log(binomial(n, x))
-            n -= x
-        return RR(res)
-
-    def sum_log(*L):
-        """
-        Return `log(sum(exp(x) for x in L))`, but without causing numerical issues.
-        In particular, we use:
-            `log(a_1 + ... + a_n)` = log(a_1) + log(1 + a_2/a_1 + ... + a_n/a_1)
-                                   = log(a_1) + log(sum(exp(log(a_i) - log(a_1)) for i=1,...,n)),
-        when the input is `log(a_1), ..., log(a_n)`, and a_1 is maximal.
-        """
-        assert L
-        if len(L) == 1:
-            return L[0]
-
-        max_L = max(L)
-        return max_L + log(sum(exp(x - max_L) for x in L))
-
-    def split_up(n):
-        """
-        Split up `n` evenly is: one equals `ceil(n / 2)`, and the other `floor(n / 2)`.
-        :return: pair (a, b) such that a + b = n.
-        """
-        return (n + 1) // 2, n // 2
-
     def __call__(
         self,
         params: LWEParameters,
@@ -92,18 +96,12 @@ class CombinatorialMeet:
 
             >>> from estimator import *
             >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(200, 10))
-            >>> LWE.primal_usvp(params)
-            rop: ≈2^87.6, tag: meet-lwe
+            >>> LWE.combinatorial_meet(params)
+            rop: ≈2^62.5, mem: ≈2^53.6, ↻: 467, tag: [May21]
 
         """
-        log_comb = CombinatorialMeet.log_comb
-        sum_log  = CombinatorialMeet.sum_log
-        split_up = CombinatorialMeet.split_up
-
         # Note: this gives issues for the "GLP I" parameter set, so don't normalize.
         # params = LWEParameters.normalize(params)
-
-        print(f'Secret distribution: {repr(params.Xs)}, tag = {params.Xs.tag}')
 
         # Check for ternary instead of sparse ternary.
         assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
@@ -170,6 +168,7 @@ class CombinatorialMeet:
 
         cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
         cost.register_impermanent(rop=True, mem=False)
+        cost["tag"] = "[May21]"
         return cost.repeat(repetitions)
 
     __name__ = "combinatorial_meet"

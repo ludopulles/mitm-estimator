@@ -6,11 +6,11 @@ High-level LWE interface
 from functools import partial
 from sage.all import oo
 
-from .lwe_primal import primal_usvp, primal_bdd, primal_hybrid
 from .lwe_bkw import coded_bkw
+from .lwe_comb import combinatorial_meet
+from .lwe_dual import dual, matzov as dual_hybrid
 from .lwe_guess import exhaustive_search, mitm, distinguish, guess_composition  # noqa
-from .lwe_dual import dual
-from .lwe_dual import matzov as dual_hybrid
+from .lwe_primal import primal_usvp, primal_bdd, primal_hybrid
 from .gb import arora_gb  # noqa
 from .lwe_parameters import LWEParameters as Parameters  # noqa
 from .conf import (
@@ -125,6 +125,13 @@ class Estimate:
         algorithms["arora-gb"] = guess_composition(arora_gb)
         algorithms["bkw"] = coded_bkw
 
+        # Combinatorial Attack
+        if params.Xs.tag == "SparseTernary" and params.Xe.is_bounded and params.Xs.mean == 0:
+            algorithms['may21'] = partial(
+                combinatorial_meet, red_cost_model=red_cost_model, red_shape_model=red_shape_model
+            )
+
+        # Primal Attacks
         algorithms["usvp"] = partial(
             primal_usvp, red_cost_model=red_cost_model, red_shape_model=red_shape_model
         )
@@ -146,6 +153,8 @@ class Estimate:
             red_cost_model=red_cost_model,
             red_shape_model=red_shape_model,
         )
+
+        # Dual Attacks
         algorithms["dual"] = partial(dual, red_cost_model=red_cost_model)
         algorithms["dual_hybrid"] = partial(dual_hybrid, red_cost_model=red_cost_model)
 
