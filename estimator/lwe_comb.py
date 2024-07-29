@@ -16,7 +16,7 @@ class CombinatorialMeet:
     """
     Estimate cost of solving LWE via MeetLWE [May21]_, using the Rep-0 representation techniques.
     """
-    def log_comb(n, *l):
+    def log_comb(n, *L):
         """
         Returns log(n! / (L[0]! L[1]! ... L[-1]!)), where sum(L) <= n.
         This is the number of ways to arrange `n` balls s.t. L[i] balls have colour i (i=0,1,...).
@@ -28,13 +28,12 @@ class CombinatorialMeet:
             8.34283...
 
         """
-        assert sum(l) <= n
+        assert sum(L) <= n
         res = 0.0
-        for x in l:
+        for x in L:
             res += log(binomial(n, x))
             n -= x
         return RR(res)
-
 
     def sum_log(*L):
         """
@@ -51,14 +50,12 @@ class CombinatorialMeet:
         max_L = max(L)
         return max_L + log(sum(exp(x - max_L) for x in L))
 
-
     def split_up(n):
         """
         Split up `n` evenly is: one equals `ceil(n / 2)`, and the other `floor(n / 2)`.
         :return: pair (a, b) such that a + b = n.
         """
         return (n + 1) // 2, n // 2
-
 
     def __call__(
         self,
