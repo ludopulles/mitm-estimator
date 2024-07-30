@@ -14,7 +14,7 @@ from .prob import amplify as prob_amplify
 
 def log_comb(n, *L):
     """
-    Returns log(n! / (L[0]! L[1]! ... L[-1]!)), where sum(L) <= n.
+    Returns log(n! / (L[0]! L[1]! ... L[-1]!)), where sum(L) <= n and `log` is with base e.
     This is the number of ways to arrange `n` balls s.t. L[i] balls have colour i (i=0,1,...).
     EXAMPLE::
 
@@ -49,7 +49,7 @@ def sum_log(*L):
     return max_L + log(sum(exp(x - max_L) for x in L))
 
 
-def split_up(n):
+def split_weight(n):
     """
     Split up `n` evenly is: one equals `ceil(n / 2)`, and the other `floor(n / 2)`.
     :return: pair (a, b) such that a + b = n.
@@ -61,6 +61,46 @@ class CombinatorialMeet:
     """
     Estimate cost of solving LWE via MeetLWE [May21]_, using the Rep-0 representation techniques.
     """
+    def odlyzko(
+        self,
+        params: LWEParameters,
+        log_level=1,
+        **kwds
+    ):
+        """
+        Estimate cost solving LWE using Odlyzko's MitM, as explain in Section 3 of [May21]_.
+
+        :param params: LWE parameters.
+        :return: A cost dictionary.
+
+        The returned cost dictionary has the following entries:
+
+        - ``rop``: Total number of word operations (≈ CPU cycles).
+        - ``mem``: The number of entries in a complete table.
+        """
+        # Check for ternary instead of sparse ternary.
+        assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
+        assert params.Xe.is_bounded, "Error distribution has to be bounded."
+        assert params.Xs.mean == 0, "Expected #1's == #-1's."
+
+        n = params.n
+
+        # Note: out of the `n` secret coefficients, `weight_s` are +1 and `weight_s` are -1.
+        w = params.Xs.get_hamming_weight(n) // 2
+
+        nl, nr = split_weight(n)
+        wl, wr = split_weight(w)
+
+        log_S1, log_S2 = log_comb(nl, wl, wl), log_comb(nr, wr, wr)
+        log_probability = log_S1 + log_S2 - log_comb(n, w, w)
+        log_runtime = sum_log(log_S1, log_S2)
+        repetitions = prob_amplify(0.99, exp(log_probability))
+
+        cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
+        cost.register_impermanent(rop=True, mem=False)
+        cost["tag"] = "Odlyzko MitM"
+        return cost.repeat(repetitions)
+
     def __call__(
         self,
         params: LWEParameters,
@@ -115,16 +155,14 @@ class CombinatorialMeet:
         logR = {}  # log(number of representatives)
         logL = {}  # log(size of list of stored candidates)
 
-        # This is *half* the hamming weight of `s`.
-
-        weight_s = params.Xs.get_hamming_weight(n) // 2
         # Note: out of the `n` secret coefficients, `weight_s` are +1 and `weight_s` are -1.
+        weight_s = params.Xs.get_hamming_weight(n) // 2
 
-        weight_s1, weight_s2 = split_up(weight_s)
+        weight_s1, weight_s2 = split_weight(weight_s)
 
-        weight_s11, weight_s12 = split_up(weight_s1)
-        weight_s21, weight_s22 = split_up(weight_s2)
-        n_left, n_right = split_up(n)
+        weight_s11, weight_s12 = split_weight(weight_s1)
+        weight_s21, weight_s22 = split_weight(weight_s2)
+        n_left, n_right = split_weight(n)
 
         # Analyse level 2.
         logL[11] = logS[11] = log_comb(n_left, weight_s11, weight_s11)
