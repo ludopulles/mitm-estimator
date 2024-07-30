@@ -5,7 +5,7 @@ Estimate cost of solving LWE using primal attacks.
 See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
-from sage.all import binomial, exp, floor, log, RR
+from sage.all import binomial, exp, floor, log, oo, RR
 
 from .cost import Cost
 from .lwe_parameters import LWEParameters
@@ -137,7 +137,7 @@ class CombinatorialMeet:
             >>> from estimator import *
             >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(200, 10))
             >>> LWE.combinatorial_meet(params)
-            rop: ≈2^62.5, mem: ≈2^53.6, ↻: 467, tag: [May21]
+            rop: ≈2^62.5, mem: ≈2^53.6, tag: [May21], ↻: 467
 
         """
         # Note: this gives issues for the "GLP I" parameter set, so don't normalize.
@@ -149,6 +149,9 @@ class CombinatorialMeet:
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
 
         n, m, logq = params.n, params.m, RR(log(params.q))
+        if params.m == oo:
+            m = n
+
         error_width = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
 
         logS = {}  # log(size of search space)
@@ -179,21 +182,21 @@ class CombinatorialMeet:
         logR[1] = log_comb(weight_s, weight_s1) * 2.0
         r = floor(logR[1] / logq)  # floor( log_q(R(1)) ) = floor( log(R(1)) / log(q) ).
 
-        # Warning: since we make a bet of s1 = (s11 || s12) and s2 = (s21 || s22), we actually
-        # enumerate over LESS candidates s1 and s2!
+        # Warning: since we make a bet of s1 = (s11 || s12) and s2 = (s21 || s22),
+        # we actually enumerate over LESS candidates s1 and s2!
         # logL[1] = logS[1] - logq * r
         # logL[2] = logS[2] - logq * r
         logL[1] = (logS[11] + logS[12]) - logq * r
         logL[2] = (logS[21] + logS[22]) - logq * r
-
         assert logS[11] + logS[12] <= logS[1]
+        assert logS[21] + logS[22] <= logS[2]
 
         # Analyse the runtime
         log_time_error_guess = RR(((r + 1) // 2) * log(error_width))
 
         # Probability of matching: 0.5^{m-r}.
-        log_time_collisions = (logL[11] + logL[12] - (m - r) * RR(log(2))  # Odlyzko matching on s1
-                               + logL[21] + logL[22] - (m - r) * RR(log(2)))  # Odlyzko matching on s2
+        log_time_collisions = sum_log(logL[11] + logL[12] - (m - r) * RR(log(2)),  # Odlyzko matching on s1
+                                      logL[21] + logL[22] - (m - r) * RR(log(2)))  # Odlyzko matching on s2
         log_time_lists = sum_log(*logL.values())
         log_runtime = log_time_error_guess + sum_log(log_time_lists, log_time_collisions)
 
