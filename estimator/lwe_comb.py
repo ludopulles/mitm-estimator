@@ -5,7 +5,7 @@ Estimate cost of solving LWE using primal attacks.
 See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
-from sage.all import binomial, ceil, exp, log, oo, RR
+from sage.all import binomial, exp, floor, log, oo, RR
 
 from .cost import Cost
 from .lwe_parameters import LWEParameters
@@ -185,12 +185,11 @@ class CombinatorialMeet:
         # There is flexibility where the w_s = w_s1 + w_s2 +1's come from. Similarly for -1's.
         logR[1] = log_comb(weight_s, weight_s1) * 2.0
 
-        # Note: this is an asymptotically optimal trade-off, since the probability that a correct
-        # representation survives the filter on `r` coordinates becomes exponentially small
-        # (~q^-x), once you go over this bound!
-        # Experimentally, we see that taking the `ceil` instead of the `floor` gives a slightly
-        # better time/success trade-off.
-        r = ceil(logR[1] / logq)
+        # Note: `r = floor(logR[1] / logq)` is asymptotically optimal,
+        # and lower bounds the probability a representation `s = s1 + s2` survives by 1/e.
+        # However, experimentally, it can sometimes be better to increase `r` by 1 or 2.
+        # TODO: find the optimal `r` here by iteratively incrementing `r`.
+        r = floor(logR[1] / logq)
 
         # Warning: since we make a bet of s1 = (s11 || s12) and s2 = (s21 || s22),
         # we actually enumerate over LESS candidates s1 and s2!
@@ -207,9 +206,8 @@ class CombinatorialMeet:
         # Probability that at least one of the representations survives the filter:
         prob_rep_survives = 1.0 - prob_rep_dies
         if prob_rep_survives == 0.0:
-            # Make the approximation: 1 - e^{-1/x} ~ 1/x - 1/2x^2
+            # Use approximation: 1 - e^{-1/x} ~ 1/x
             prob_rep_survives = exp(logR[1] - r * logq)
-            prob_rep_survives = prob_rep_survives - prob_rep_survives**2 / 2
 
         # Probability of matching: 0.5^{m-r},
         # for Odlyzko-style matching on s1 and s2 respectively.
