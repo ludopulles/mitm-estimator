@@ -5,7 +5,7 @@ Estimate cost of solving LWE using primal attacks.
 See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
-from sage.all import binomial, exp, floor, log, oo, RR
+from sage.all import binomial, ceil, exp, log, oo, RR
 
 from .cost import Cost
 from .lwe_parameters import LWEParameters
@@ -98,12 +98,14 @@ class CombinatorialMeet:
 
         cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
         cost.register_impermanent(rop=True, mem=False)
+        cost = cost.repeat(repetitions)
         cost["tag"] = "Odlyzko MitM"
-        return cost.repeat(repetitions)
+        return cost
 
     def __call__(
         self,
         params: LWEParameters,
+        target_success_probability=0.99,
         log_level=1,
         **kwds,
     ):
@@ -125,6 +127,8 @@ class CombinatorialMeet:
         (1) are close to a target `t` under a projection map onto `r` coefficients.
 
         :param params: LWE parameters.
+        :param target_success_probability: the desired lower bound on the probability that (a
+        number of repetitions of) the algorithm yields the correct output.
         :return: A cost dictionary.
 
         The returned cost dictionary has the following entries:
@@ -135,12 +139,12 @@ class CombinatorialMeet:
         EXAMPLE::
 
             >>> from estimator import *
-            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(200, 10))
+            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(10))
             >>> LWE.combinatorial_meet(params)
-            rop: ≈2^62.5, mem: ≈2^53.6, tag: [May21], ↻: 467
+            rop: ≈2^59.7, mem: ≈2^45.8, ↻: ≈2^13.9, tag: [May21]
 
         """
-        # Note: this gives issues for the "GLP I" parameter set, so don't normalize.
+        # Note: normalizing gives issues for the "GLP I" parameter set, so don't do that!
         # params = LWEParameters.normalize(params)
 
         # Check for ternary instead of sparse ternary.
@@ -155,7 +159,7 @@ class CombinatorialMeet:
         error_width = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
 
         logS = {}  # log(size of search space)
-        logR = {}  # log(number of representatives)
+        logR = {}  # log(number of representatives) (i.e. ways to write s = s1 + s2)
         logL = {}  # log(size of list of stored candidates)
 
         # Note: out of the `n` secret coefficients, `weight_s` are +1 and `weight_s` are -1.
@@ -180,37 +184,53 @@ class CombinatorialMeet:
         # Number of ways that we can construct s from s1 + s2.
         # There is flexibility where the w_s = w_s1 + w_s2 +1's come from. Similarly for -1's.
         logR[1] = log_comb(weight_s, weight_s1) * 2.0
-        r = floor(logR[1] / logq)  # floor( log_q(R(1)) ) = floor( log(R(1)) / log(q) ).
+
+        # Note: this is an asymptotically optimal trade-off, since the probability that a correct
+        # representation survives the filter on `r` coordinates becomes exponentially small
+        # (~q^-x), once you go over this bound!
+        # Experimentally, we see that taking the `ceil` instead of the `floor` gives a slightly
+        # better time/success trade-off.
+        r = ceil(logR[1] / logq)
 
         # Warning: since we make a bet of s1 = (s11 || s12) and s2 = (s21 || s22),
         # we actually enumerate over LESS candidates s1 and s2!
-        # logL[1] = logS[1] - logq * r
-        # logL[2] = logS[2] - logq * r
-        logL[1] = (logS[11] + logS[12]) - logq * r
-        logL[2] = (logS[21] + logS[22]) - logq * r
+        logL[1] = (logS[11] + logS[12]) - logq * r  # logS[1] - logq * r
+        logL[2] = (logS[21] + logS[22]) - logq * r  # logS[2] - logq * r
         assert logS[11] + logS[12] <= logS[1]
         assert logS[21] + logS[22] <= logS[2]
 
         # Analyse the runtime
         log_time_error_guess = RR(((r + 1) // 2) * log(error_width))
 
-        # Probability of matching: 0.5^{m-r}.
-        log_time_collisions = sum_log(logL[11] + logL[12] - (m - r) * RR(log(2)),  # Odlyzko matching on s1
-                                      logL[21] + logL[22] - (m - r) * RR(log(2)))  # Odlyzko matching on s2
-        log_time_lists = sum_log(*logL.values())
-        log_runtime = log_time_error_guess + sum_log(log_time_lists, log_time_collisions)
+        # Note: (1 - 1/q^r)^R1 = (1 + 1/q^r)^{q^r * -R1/q^r} ~ e^{-R1/q^r}.
+        prob_rep_dies = exp(-exp(logR[1] - r * logq)) if r*logq > 20 else exp(exp(logR[1]) * log(1 - exp(-r * logq)))
+        # Probability that at least one of the representations survives the filter:
+        prob_rep_survives = 1.0 - prob_rep_dies
+        if prob_rep_survives == 0.0:
+            # Make the approximation: 1 - e^{-1/x} ~ 1/x - 1/2x^2
+            prob_rep_survives = exp(logR[1] - r * logq)
+            prob_rep_survives = prob_rep_survives - prob_rep_survives**2 / 2
+
+        # Probability of matching: 0.5^{m-r},
+        # for Odlyzko-style matching on s1 and s2 respectively.
+        log_time_collisions = [logL[a] + logL[b] - (m - r) * RR(log(2))
+                               for (a, b) in [(11, 12), (21, 22)]]
+        log_time_lists = logL.values()
+        log_runtime = log_time_error_guess + sum_log(*log_time_lists, *log_time_collisions)
 
         # Analyse the success probability
         bet_s1 = logS[11] + logS[12] - logS[1]  # < 0
         bet_s2 = logS[21] + logS[22] - logS[2]  # < 0
 
         log_probability = bet_s1 + bet_s2
-        repetitions = prob_amplify(0.99, exp(log_probability))
+        repetitions = prob_amplify(target_success_probability,
+                                   prob_rep_survives * exp(log_probability))
 
         cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
         cost.register_impermanent(rop=True, mem=False)
+        cost = cost.repeat(repetitions)
         cost["tag"] = "[May21]"
-        return cost.repeat(repetitions)
+        return cost
 
     __name__ = "combinatorial_meet"
 
