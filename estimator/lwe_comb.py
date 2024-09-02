@@ -57,18 +57,17 @@ def split_weight(n):
     return (n + 1) // 2, n // 2
 
 
-class CombinatorialMeet:
-    """
-    Estimate cost of solving LWE via MeetLWE [May21]_, using the Rep-0 representation techniques.
-    """
-    def odlyzko(
+class Odlyzko:
+    def __call__(
         self,
         params: LWEParameters,
         log_level=1,
         **kwds
     ):
         """
-        Estimate cost solving LWE using Odlyzko's MitM, as explain in Section 3 of [May21]_.
+        Estimate cost of solving LWE using a MitM strategy dating back to Odlyzko.
+        Note: when comparing to [May21], they use |S|^{0.5} instead of an actual computation,
+              which should actually be the same up to polynomial factors.
 
         :param params: LWE parameters.
         :return: A cost dictionary.
@@ -78,9 +77,12 @@ class CombinatorialMeet:
         - ``rop``: Total number of word operations (≈ CPU cycles).
         - ``mem``: The number of entries in a complete table.
         """
+
         # Check for ternary instead of sparse ternary.
         assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
+
+        # Note: Odlyzko easily extends beyond "mean = 0
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
 
         n = params.n
@@ -102,6 +104,8 @@ class CombinatorialMeet:
         cost["tag"] = "Odlyzko MitM"
         return cost
 
+
+class MeetRep0:
     def __call__(
         self,
         params: LWEParameters,
@@ -110,7 +114,7 @@ class CombinatorialMeet:
         **kwds,
     ):
         """
-        Estimate cost of solving LWE via Meet-LWE [May21]_.
+        Estimate cost of solving LWE via Meet-LWE Rep-0 [May21]_.
 
         The goal is to recover the ternary secret `s` from b = As + e, where the secret is of a
         special form. Namely, `s \\in T^{n}(w/2)`, where this set `T^{n}(w/2)` consists of all
@@ -140,8 +144,8 @@ class CombinatorialMeet:
 
             >>> from estimator import *
             >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(10))
-            >>> LWE.combinatorial_meet(params)
-            rop: ≈2^59.7, mem: ≈2^45.8, ↻: ≈2^13.9, tag: [May21]
+            >>> LWE.meet_rep0(params)
+            rop: ≈2^58.2, mem: ≈2^49.3, ↻: 476, tag: [May21]
 
         """
         # Note: normalizing gives issues for the "GLP I" parameter set, so don't do that!
@@ -230,7 +234,8 @@ class CombinatorialMeet:
         cost["tag"] = "[May21]"
         return cost
 
-    __name__ = "combinatorial_meet"
+    __name__ = "Meet (Rep-0)"
 
 
-combinatorial_meet = CombinatorialMeet()
+odlyzko = Odlyzko()
+meet_rep0 = MeetRep0()

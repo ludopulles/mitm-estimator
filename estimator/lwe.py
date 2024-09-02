@@ -7,7 +7,7 @@ from functools import partial
 from sage.all import oo
 
 from .lwe_bkw import coded_bkw
-from .lwe_comb import combinatorial_meet
+from .lwe_comb import meet_rep0
 from .lwe_dual import dual, matzov as dual_hybrid
 from .lwe_guess import exhaustive_search, mitm, distinguish, guess_composition  # noqa
 from .lwe_primal import primal_usvp, primal_bdd, primal_hybrid
@@ -128,7 +128,7 @@ class Estimate:
         # Combinatorial Attack
         if params.Xs.tag == "SparseTernary" and params.Xe.is_bounded and params.Xs.mean == 0:
             algorithms['may21'] = partial(
-                combinatorial_meet, red_cost_model=red_cost_model, red_shape_model=red_shape_model
+                meet_rep0, red_cost_model=red_cost_model, red_shape_model=red_shape_model
             )
 
         # Primal Attacks
