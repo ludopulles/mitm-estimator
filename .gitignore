@@ -3,3 +3,6 @@
 venv/
 __pycache__
 *.swp
+
+may_asymptotics_depth*.csv
+may_asymptotics_depth*.png

@@ -1,5 +1,6 @@
 from functools import cache
 from math import ceil, log2
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -29,7 +30,7 @@ def odlyzko(omega):
     return lgS(omega) / 2
 
 
-def howard_graham(omega):
+def howgrave_graham(omega):
     return H2(omega / 4) - omega / 2
 
 
@@ -40,6 +41,7 @@ def meet_rep0(depth, omega):
     Note: any depth > 3 is suboptimal!
     """
     if depth == 2:
+        # Theorem 1 in [May21].
         return max(0.5 * H2(omega / 4), H2(omega / 4) - omega)
     else:
         return max(2 * H2(omega / 8) - 1.5 * omega, meet_rep0(depth - 1, omega / 2))
@@ -138,6 +140,10 @@ def optimal_times(depth, omega, eps):
     return 2 * S_2 - R_1 - R_2, sub_time
 
 
+def meet_rep1(depth, omega):
+    return optimal_epsilon(depth, omega / 2)[1]
+
+
 def time_rep1(omega, vareps_1, vareps_2, vareps_3, all_times=False):
     # Determine relative weights
     omega_0 = omega / 2
@@ -202,9 +208,9 @@ def verify_table_5():
         REP0d3 = meet_rep0(3, omega)
         REP0d4 = meet_rep0(4, omega)
 
-        REP1d2 = optimal_epsilon(2, omega / 2)[1]
-        REP1d3 = optimal_epsilon(3, omega / 2)[1]
-        REP1d4 = optimal_epsilon(4, omega / 2)[1]
+        REP1d2 = meet_rep1(2, omega)
+        REP1d3 = meet_rep1(3, omega)
+        REP1d4 = meet_rep1(4, omega)
 
         print(f'{omega:5.3f} | {odly:5.3f} | {May_odly:5.3f} '
               f'| {ceil_print(REP0d2, 3)} | {ceil_print(REP0d3, 3)} '
@@ -214,51 +220,60 @@ def verify_table_5():
     print()
 
 
-def plot_algorithms():
-    xs = list(np.arange(0.01, 1, 0.01))
+def plot_algorithms(max_depth=3):
+    omegas = list(np.arange(0.001, 0.1, 0.001)) + list(np.arange(0.1, 1, 0.01))
+    depths = list(range(2, max_depth + 1))
+
     labels = [
-        # 'Odlyzko', 'Howard-Graham',
-        'REP-0 (d=2)', 'REP-0 (d=3)', 'REP-0 (d=4)',
-        'REP-1 (d=2)', 'REP-1 (d=3)', 'REP-1 (d=4)',
+        'Odlyzko', 'Howgrave-Graham',
+        *[f'REP-0 (d={d}),' for d in depths],
+        *[f'REP-1 (d={d}),' for d in depths],
     ]
     data = []
 
-    for omega in xs:
-        ss = lgS(omega)
-        # odly = odlyzko(omega)
-        # hw = howard_graham(omega)
+    with open(f'may_asymptotics_depth{max_depth}.csv', 'w') as f:
+        print('omega, lg |S|, Odlyzko, Howgrave-Graham,',
+              *[f'REP-0 (d={d}),' for d in depths],
+              *[f'REP-1 (d={d}),' for d in depths], file=f)
+        for omega in omegas:
+            ss = lgS(omega)
+            odly = odlyzko(omega)
+            hw = howgrave_graham(omega)
 
-        REP0d2 = meet_rep0(2, omega)
-        REP0d3 = meet_rep0(3, omega)
-        REP0d4 = meet_rep0(4, omega)
+            REP0 = [meet_rep0(d, omega) for d in depths]
+            REP1 = [meet_rep1(d, omega) for d in depths]
 
-        REP1d2 = optimal_epsilon(2, omega / 2)[1]
-        REP1d3 = optimal_epsilon(3, omega / 2)[1]
-        REP1d4 = optimal_epsilon(4, omega / 2)[1]
+            data.append([
+                odly / ss, hw / ss,
+                *[t / ss for t in REP0],
+                *[t / ss for t in REP1],
+            ])
 
-        data.append((
-            # odly / ss, hw / ss,
-            REP0d2 / ss, REP0d3 / ss, REP0d4 / ss,
-            REP1d2 / ss, REP1d3 / ss, REP1d4 / ss,
-        ))
+            print(f'{omega:5.3f}, {lgS(omega):6.4f}, {odlyzko(omega):7.4f}, '
+                  f'{howgrave_graham(omega):15.4f},',
+                  *[f'{t:11.4f},' for t in REP0],
+                  *[f'{t:11.4f},' for t in REP1],
+                  file=f)
 
-        # print(f'{omega:5.3f}: '
-        #       f'{REP0d2:5.3f} {REP0d3:5.3f} {REP0d4:5.3f}, '
-        #       f'{REP1d2:5.3f} {REP1d3:5.3f} {REP1d4:5.3f}')
     data = list(zip(*data))
-
     for label, ys in zip(labels, data):
-        plt.plot(xs, ys, label=label)
+        plt.plot(omegas, ys, label=label)
     plt.xlabel('omega ~ w/n')
     plt.ylabel('log(time) / log(search-space)')
-    plt.gca().set_ylim([0.2, 0.6])
+    plt.gca().set_ylim([0.2, 0.8])
     plt.legend()
+
+    # Generate 1920x1080 image:
+    plt.gcf().set_size_inches(16, 9)
+    plt.savefig(f'may_asymptotics_depth{max_depth}.png', dpi=120)
+
     plt.show()
 
 
 def __main__():
-    verify_table_5()
-    plot_algorithms()
+    max_depth = 3 if len(sys.argv) == 1 else int(sys.argv[1])
+    # verify_table_5()
+    plot_algorithms(max_depth)
 
 
 if __name__ == "__main__":
