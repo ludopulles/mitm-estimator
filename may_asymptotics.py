@@ -212,7 +212,7 @@ def verify_table_5():
         REP1d3 = meet_rep1(3, omega)
         REP1d4 = meet_rep1(4, omega)
 
-        print(f'{omega:5.3f} | {odly:5.3f} | {May_odly:5.3f} '
+        print(f'{omega:5.3f} | {ceil_print(odly, 3)} | {May_odly:5.3f} '
               f'| {ceil_print(REP0d2, 3)} | {ceil_print(REP0d3, 3)} '
               f'| {ceil_print(REP0d4, 3)} | {May_REP0:5.3f} '
               f'| {ceil_print(REP1d2, 3)} | {ceil_print(REP1d3, 3)} '
