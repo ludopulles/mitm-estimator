@@ -57,8 +57,9 @@ def binary_search_f(f, left, right):
     """
     Given a continuous increasing function f such that f(left) < 0 and f(right) > 0, return `x`
     such that f(x) = 0, using `BS_PRECISION` iterations.
+    Absolute error: (right-left) / 2^{BS_PRECISION}.
     """
-    for _ in range(BS_PRECISION):  # absolute error < 1e-9
+    for _ in range(BS_PRECISION):
         mid = 0.5 * (left + right)
         if f(mid) < 0:
             left = mid
@@ -70,9 +71,10 @@ def binary_search_f(f, left, right):
 def ternary_search_f(f, left, right):
     """
     Given a continuous function f such that there is a local minimum `x` in [left, right], return
-    `x`.
+    `x`, using `BS_PRECISION` iterations.
+    Absolute error: (right-left) * (2/3)^{BS_PRECISION}.
     """
-    for _ in range(BS_PRECISION):  # absolute error < 1e-9
+    for _ in range(BS_PRECISION):
         a, b = (2 * left + right) / 3, (left + 2 * right) / 3
         if f(a) < f(b):
             right = b
@@ -88,33 +90,29 @@ def optimal_epsilon(depth, omega):
     `depth`, you should have secrets with `omega/2 + eps` of them being 1's (and number of -1's),
     that combine into secrets of weight `omega` at level 0.
 
-    :returns: a pair of `epsilon` and `time`.
+    :return: `epsilon`
     """
+    def g(eps):
+        base_time, sub_time = optimal_times(depth, omega, eps)
+        return sub_time - base_time
+
     if depth == 2:
         # Base case: try to balance the cost of generating the two lists and the merged list.
-        if H2(omega / 2) - 2 * omega < 0.5 * H2(omega / 2):
-            # eps = 0 is optimal, so this is basically REP-0.
-            return 0.0, 0.5 * H2(omega / 2)
-        else:
-            def f(eps):
-                return 2 * omega + (1 - 2 * omega) * H2(eps / (1 - 2 * omega)) - 0.5 * H2(omega / 2 + eps)
+        if g(0.0) > 0:
+            # More time is already spent on the Odlyzko layer, so this is basically REP-0 (eps=0).
+            return 0.0
+        return binary_search_f(g, 0, 0.5 - omega)
 
-            opt_eps = binary_search_f(f, 0, 0.5 - omega)
-            # T_1 = 2 * omega + (1 - 2 * omega) * H2(eps / (1 - 2 * omega))
-            # T_2 = 0.5 * H2(omega / 2 + eps)
-            # return eps, max(T_1, T_2)
-    else:
-        def f(eps):
-            return optimal_times(depth, omega, eps)[0]
+    # First minimize the time spent on the base layer, by performing a ternary search.
+    def f(eps):
+        return optimal_times(depth, omega, eps)[0]
 
-        def g(eps):
-            base_time, sub_time = optimal_times(depth, omega, eps)
-            return sub_time - base_time
-
-        opt_eps = ternary_search_f(f, 0, 0.5 - omega)
-        if g(opt_eps) > 0:
-            opt_eps = binary_search_f(g, 0, opt_eps)
-    return opt_eps, max(optimal_times(depth, omega, opt_eps))
+    opt_eps = ternary_search_f(f, 0, 0.5 - omega)
+    if g(opt_eps) > 0:
+        # Now, potentially find the sweet spot such that T_{base-layer} = T_{higher-layers},
+        # where the maximum is equal to the two.
+        return binary_search_f(g, 0, opt_eps)
+    return opt_eps
 
 
 @cache
@@ -124,7 +122,7 @@ def optimal_times(depth, omega, eps):
     :param omega: a target weight for the layer below,
     :param eps: the increase of weight for the current layer.
     :param depth: depth of the tree
-    :returns: pair of 1) time for level 1 and 2) time for the lower layers
+    :return: pair of 1) time for level 1 and 2) time for the lower layers
     """
     sub_omega = omega / 2 + eps
     R_1 = 2 * omega + (0 if eps == 0 else (1 - 2 * omega) * H2(eps / (1 - 2 * omega)))
@@ -133,7 +131,8 @@ def optimal_times(depth, omega, eps):
         S_1 = H2(sub_omega)
         return S_1 - R_1, 0.5 * S_1
 
-    delta, sub_time = optimal_epsilon(depth - 1, sub_omega)
+    delta = optimal_epsilon(depth - 1, sub_omega)
+    sub_time = max(optimal_times(depth - 1, sub_omega, delta))
 
     S_2 = H2(sub_omega / 2 + delta)
     R_2 = 2 * sub_omega + (0 if delta == 0 else (1 - 2 * sub_omega) * H2(delta / (1 - 2 * sub_omega)))
@@ -141,7 +140,8 @@ def optimal_times(depth, omega, eps):
 
 
 def meet_rep1(depth, omega):
-    return optimal_epsilon(depth, omega / 2)[1]
+    eps = optimal_epsilon(depth, omega / 2)
+    return max(optimal_times(depth, omega / 2, eps))
 
 
 def time_rep1(omega, vareps_1, vareps_2, vareps_3, all_times=False):
