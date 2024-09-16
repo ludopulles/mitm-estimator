@@ -175,34 +175,41 @@ class Cost(UserDict):
     def __rmul__(self, times):
         return self.repeat(times)
 
-    def combine(self, right, base=None):
-        """Combine ``left`` and ``right``.
+    def combine(self, right):
+        """Combine ``self`` and ``right`` into one cost.
 
-        :param left: cost dictionary
+        :param self: this cost dictionary
         :param right: cost dictionary
-        :param base: add entries to ``base``
 
         EXAMPLE::
 
             >>> from estimator.cost import Cost
-            >>> c0 = Cost(a=1)
-            >>> c1 = Cost(b=2)
-            >>> c2 = Cost(c=3)
+            >>> c0, c1, c2 = Cost(a=1), Cost(b=2), Cost(c=3)
             >>> c0.combine(c1)
             a: 1, b: 2
-            >>> c0.combine(c1, base=c2)
+            >>> c2.combine(c0).combine(c1)
             c: 3, a: 1, b: 2
 
         """
-        base_dict = {} if base is None else base
-        cost = {**base_dict, **self, **right}
-        return Cost(**cost)
+        return Cost(**self, **right)
 
     def __bool__(self):
         return self.get("rop", oo) < oo
 
     def __add__(self, other):
-        return self.combine(self, other)
+        """
+        Return the combination of this cost and cost of ``other``.
+
+        EXAMPLE::
+
+            >>> from estimator.cost import Cost
+            >>> c0, c1, c2 = Cost(a=1), Cost(b=2), Cost(c=3)
+            >>> c1 += c0
+            >>> c2 + c1
+            c: 3, b: 2, a: 1
+
+        """
+        return self.combine(other)
 
     def __repr__(self):
         return self.str(compact=True)
