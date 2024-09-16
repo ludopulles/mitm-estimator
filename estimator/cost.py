@@ -42,15 +42,19 @@ class Cost(UserDict):
     key_map = {
         "delta": "δ",
         "beta": "β",
-        "beta_": "β'",
         "eta": "η",
-        "eta_": "η'",
         "epsilon": "ε",
         "zeta": "ζ",
-        "zeta_": "ζ'",
         "ell": "ℓ",
-        "ell_": "ℓ'",
         "repetitions": "↻",
+    }
+
+    # Note: these are in the range of U+2080 - U+208E.
+    # Superscripts are found in U+00B2, U+00B3, U+00B9, and U+2070 - U+207F.
+    key_sub_map = {
+        "": "'",
+        "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄",
+        "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉",
     }
 
     val_map = {"beta": "%8d", "beta_": "%8d", "d": "%8d", "delta": "%8.6f"}
@@ -71,9 +75,14 @@ class Cost(UserDict):
             δ: 5.000000, bar: 2
 
         """
+        def format_key(key):
+            if key.find("_") >= 0:
+                key, sub = key.split("_")
+                return self.key_map.get(key, key) + self.key_sub_map.get(sub, "_" + sub)
+            return self.key_map.get(key, key)
 
         def value_str(k, v):
-            kstr = self.key_map.get(k, k)
+            kstr = format_key(k)
             kk = f"{kstr:>{keyword_width}}"
             try:
                 if (1 / round_bound < abs(v) < round_bound) or (not v) or (k in self.val_map):
