@@ -121,7 +121,7 @@ class MeetREP0:
         **kwds,
     ):
         """
-        Estimate cost of solving LWE using REP-0 from [May21]_.
+        Estimate cost of solving LWE using REP-0 from [C:May21]_.
 
         TODO: move this to the documentation:
         The goal is to recover the ternary secret `s` from b = As + e, where the secret is of a
@@ -138,10 +138,9 @@ class MeetREP0:
         Moreover, to construct s_1 and s_2 we also employ a MitM strategy such that both sides of
         (1) are close to a target `t` under a projection map onto `r` coefficients.
 
-        :param params: LWE parameters.
-        :param target_probability: the desired lower bound on the probability that (a
-        number of repetitions of) the algorithm yields the correct output.
-        :return: A cost dictionary.
+        :param params: the LWE parameters
+        :param target_probability: the desired success probability of the attack
+        :return: the cost to run this attack
 
         The returned cost dictionary has the following entries:
 
@@ -153,7 +152,7 @@ class MeetREP0:
             >>> from estimator import *
             >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(10))
             >>> LWE.meet_rep0(params)
-            rop: ≈2^58.2, mem: ≈2^49.3, ↻: 476, tag: REP-0
+            rop: ≈2^59.7, mem: ≈2^45.8, ↻: ≈2^13.9, r: 3, tag: REP-0 (d=2)
 
         """
         # Note: normalizing gives issues for the "GLP I" parameter set, so don't do that!
@@ -189,10 +188,7 @@ class MeetREP0:
         logS[1] = log_comb(n, w1, w1)
         logS[2] = log_comb(n, w2, w2)
 
-        # Find the optimal `r` here by iteratively incrementing `r`.
-        r = floor(log_R1 / logq)
-        cur_cost = {'rop': oo}
-        while True:
+        def optimize_r(r):
             # Warning: we make a bet on the weight distribution of:
             #     s1 = (s11 || s12), and s2 = (s21 || s22),
             # so we actually enumerate over LESS candidates s1 and s2!
@@ -200,7 +196,7 @@ class MeetREP0:
             logL[2] = (logS[21] + logS[22]) - r * logq
 
             # Analyse the runtime
-            log_time_guess = ((r + 1) // 2) * log(error_width)
+            log_time_guess = RR((r + 1) / 2) * log(error_width)
             log_time_lists = sum_log(*logL.values())
             log_runtime = log_time_guess + log_time_lists
 
@@ -216,49 +212,119 @@ class MeetREP0:
             cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
             cost.register_impermanent(rop=True, mem=False)
             cost = cost.repeat(repetitions)
-            cost['tag'] = 'REP-0'
+            cost['r'] = r
+            cost['tag'] = 'REP-0 (d=2)'
+            return cost
 
-            if not cost <= cur_cost:
+        # Find the optimal `r` here by iteratively incrementing `r`.
+        best = {'rop': oo}
+        r = floor(log_R1 / logq)
+        while True:
+            cost = optimize_r(r)
+            if not cost <= best:
                 break
-
-            cur_cost = cost
+            best = cost
             r += 1
-        return cur_cost
+        return best
 
 
-class MeetREP1:
-    def asymptotic_complexity_depth2(self, omega):
+class AsymptoticMeetREP1:
+    """
+    Methods to determine the epsilon parameters to run the Meet-LWE REP-1 attack optimally in the
+    asymptotic setting.
+    """
+    BS_PRECISION = 20
+
+    def H2(self, x):
         """
-        Return how to pick `epsilon / n` asymptotically such that the runtime is minimal.
+        Return `H(x, x, 1 - 2x)`, where H is the binary entropy function, base 2!
         """
-        omega0 = omega / 2
+        assert 0 < x < 0.5
+        return -2 * x * log(x, 2) - (1.0 - 2 * x) * log(1.0 - 2 * x, 2)
 
-        def H2(x):
-            """
-            Return `H(x, x, 1 - 2x)`, where H is the binary entropy function, base e.
-            """
-            assert 0 < x < 0.5
-            return -2 * x * log(x, 2) - (1.0 - 2 * x) * log(1.0 - 2 * x, 2)
-
-        def f(eps):
-            R_1 = omega + (0 if eps == 0 else (1 - omega) * H2(eps / (1 - omega)))
-            S_1 = H2(omega0 / 2 + eps)
-
-            T_1, T_2 = S_1 - R_1, 0.5 * S_1
-            return T_2 - T_1
-
-        if f(0.0) > 0:
-            # More time is already spent on the Odlyzko layer, so this is basically REP-0 (eps=0).
-            return 0.0
-        # Perform a binary search
-        left, right = 0, 0.5 - omega0
-        for _ in range(20):
+    def binary_search_f(self, f, left, right):
+        """
+        Given a continuous increasing function f such that f(left) < 0 and f(right) > 0, return `x`
+        such that f(x) = 0, using `BS_PRECISION` iterations.
+        Absolute error: (right-left) / 2^{BS_PRECISION}.
+        """
+        for _ in range(self.BS_PRECISION):
             mid = 0.5 * (left + right)
             if f(mid) < 0:
                 left = mid
             else:
                 right = mid
         return 0.5 * (left + right)
+
+    def ternary_search_f(self, f, left, right):
+        """
+        Given a continuous function f such that there is a local minimum `x` in [left, right], return
+        `x`, using `BS_PRECISION` iterations.
+        Absolute error: (right-left) * (2/3)^{BS_PRECISION}.
+        """
+        for _ in range(self.BS_PRECISION):
+            a, b = (2 * left + right) / 3, (left + 2 * right) / 3
+            if f(a) < f(b):
+                right = b
+            else:
+                left = a
+        return 0.5 * (left + right)
+
+    def optimal_epsilon(self, depth, omega):
+        """
+        Tries to find the optimal parameter `epsilon`, which says that at level 1 of a tree of depth
+        `depth`, you should have secrets with `omega/2 + eps` of them being 1's (and number of -1's),
+        that combine into secrets of weight `omega` at level 0.
+
+        :return: `epsilon`
+        """
+        def g(eps):
+            base_time, sub_time = self.optimal_times(depth, omega, eps)
+            return sub_time - base_time
+
+        if depth == 2:
+            # Base case: try to balance the cost of generating the two lists and the merged list.
+            if g(0.0) > 0:
+                # More time is already spent on the Odlyzko layer, so this is basically REP-0 (eps=0).
+                return 0.0
+            return self.binary_search_f(g, 0, 0.5 - omega)
+
+        # First minimize the time spent on the base layer, by performing a ternary search.
+        def f(eps):
+            return self.optimal_times(depth, omega, eps)[0]
+
+        opt_eps = self.ternary_search_f(f, 0, 0.5 - omega)
+        if g(opt_eps) > 0:
+            # Now, potentially find the sweet spot such that T_{base-layer} = T_{higher-layers},
+            # where the maximum is equal to the two.
+            return self.binary_search_f(g, 0, opt_eps)
+        return opt_eps
+
+    def optimal_times(self, depth, omega, eps):
+        """
+        Return the needed time for level 1, and deeper layers, by picking `delta` optimally.
+        :param omega: a target weight for the layer below,
+        :param eps: the increase of weight for the current layer.
+        :param depth: depth of the tree
+        :return: pair of 1) time for level 1 and 2) time for the lower layers
+        """
+        sub_omega = omega / 2 + eps
+        R_1 = 2 * omega + (0 if eps == 0 else (1 - 2 * omega) * self.H2(eps / (1 - 2 * omega)))
+        if depth == 2:
+            # Base case.
+            S_1 = self.H2(sub_omega)
+            return S_1 - R_1, 0.5 * S_1
+
+        delta = self.optimal_epsilon(depth - 1, sub_omega)
+        sub_time = max(self.optimal_times(depth - 1, sub_omega, delta))
+
+        S_2 = self.H2(sub_omega / 2 + delta)
+        R_2 = 2 * sub_omega + (0 if delta == 0 else (1 - 2 * sub_omega) * self.H2(delta / (1 - 2 * sub_omega)))
+        return 2 * S_2 - R_1 - R_2, sub_time
+
+
+class MeetREP1:
+    _asymptotic = AsymptoticMeetREP1()
 
     def depth2(
         self,
@@ -267,7 +333,7 @@ class MeetREP1:
         **kwds,
     ):
         """
-        Estimate cost of solving LWE using REP-1 with depth=2 from [May21]_.
+        Estimate cost of solving LWE using REP-1 with depth=2 from [C:May21]_.
 
         TODO: move this to the documentation:
         The goal is to recover the ternary secret `s` from b = As + e, where the secret is of a
@@ -284,10 +350,9 @@ class MeetREP1:
         Moreover, to construct s_1 and s_2 we also employ a MitM strategy such that both sides of
         (1) are close to a target `t` under a projection map onto `r` coefficients.
 
-        :param params: LWE parameters.
-        :param target_probability: the desired lower bound on the probability that (a
-        number of repetitions of) the algorithm yields the correct output.
-        :return: A cost dictionary.
+        :param params: the LWE parameters
+        :param target_probability: the desired success probability of the attack
+        :return: the cost to run this attack
 
         The returned cost dictionary has the following entries:
 
@@ -299,7 +364,7 @@ class MeetREP1:
             >>> from estimator import *
             >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(10))
             >>> LWE.meet_rep1(params)
-            rop: ≈2^58.2, mem: ≈2^49.3, ↻: 476, tag: REP-1
+            rop: ≈2^59.1, mem: ≈2^50.3, ↻: 452, r: 4, ε: 1, tag: REP-1 (d=2)
 
         """
         # Note: normalizing gives issues for the "GLP I" parameter set, so don't do that!
@@ -318,7 +383,7 @@ class MeetREP1:
         w0 = w // 2
         w1, w2 = split_weight(w0)
 
-        asymptotic_epsilon = int(round(n * self.asymptotic_complexity_depth2(w / n)))
+        asymptotic_epsilon = int(round(n * self._asymptotic.optimal_epsilon(2, w0 / n)))
         w1 += asymptotic_epsilon
         w2 += asymptotic_epsilon
 
@@ -343,10 +408,7 @@ class MeetREP1:
         logS[1] = log_comb(n, w1, w1)
         logS[2] = log_comb(n, w2, w2)
 
-        # Find the optimal `r` here by iteratively incrementing `r`.
-        r = floor(log_R1 / logq)
-        cur_cost = {'rop': oo}
-        while True:
+        def optimize_r(r):
             # Warning: we make a bet on the weight distribution of:
             #     s1 = (s11 || s12), and s2 = (s21 || s22),
             # so we actually enumerate over LESS candidates s1 and s2!
@@ -354,7 +416,7 @@ class MeetREP1:
             logL[2] = (logS[21] + logS[22]) - r * logq
 
             # Analyse the runtime
-            log_time_guess = RR(((r + 1) // 2) * log(error_width))
+            log_time_guess = RR((r + 1) / 2) * log(error_width)
             log_time_lists = sum_log(*logL.values())
             log_runtime = log_time_guess + log_time_lists
 
@@ -370,15 +432,122 @@ class MeetREP1:
             cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
             cost.register_impermanent(rop=True, mem=False)
             cost = cost.repeat(repetitions)
+            cost['r'] = r
             cost['epsilon'] = asymptotic_epsilon
-            cost['tag'] = 'REP-1'
+            cost['tag'] = 'REP-1 (d=2)'
+            return cost
 
-            if not cost <= cur_cost:
+        # Find the optimal `r` here by iteratively incrementing `r`.
+        best = {'rop': oo}
+        r = floor(log_R1 / logq)
+        while True:
+            cost = optimize_r(r)
+            if not cost <= best:
                 break
-
-            cur_cost = cost
+            best = cost
             r += 1
-        return cur_cost
+        return best
+
+    def depth3(
+        self,
+        params: LWEParameters,
+        target_probability=0.99,
+        **kwds,
+    ):
+        """
+        Estimate cost of solving LWE using REP-1 with depth=3 from [C:May21]_.
+
+        :param params: the LWE parameters
+        :param target_probability: the desired success probability of the attack
+        :return: the cost to run this attack
+
+        The returned cost dictionary has the following entries:
+
+        - ``rop``: Total number of word operations (≈ CPU cycles).
+        - ``mem``: The number of entries in a complete table.
+        """
+        # Note: normalizing gives issues for the "GLP I" parameter set, so don't do that!
+        # params = LWEParameters.normalize(params)
+
+        # Check for ternary instead of sparse ternary.
+        assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
+        assert params.Xs.mean == 0, "Expected #1's == #-1's."
+        assert params.Xe.is_bounded, "Error distribution has to be bounded."
+
+        n, logq = params.n, RR(log(params.q))
+        error_width = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
+
+        # The secret has `w0` coefficients equal to 1, and `w0` equal to -1.
+        w = params.Xs.get_hamming_weight(n)
+        w0 = w // 2
+
+        def optimize_eps(eps1, eps2):
+            w1 = (w0 + 1) // 2 + eps1
+            w2 = (w1 + 1) // 2 + eps2
+
+            # Analyse level 3 (using Odlyzko):
+            log_S3 = log_comb((n + 1) // 2, *split_weight(w2))
+            log_T3 = log_S3  # Time for enumerating over whole search space S3.
+
+            # Analyse level 2 (using Howard-Graham):
+            log_R2 = log_comb(n - 2 * w1, eps2, eps2) + 2 * log_comb(w1, w1 // 2)
+            log_S2 = log_comb(n, w2, w2)
+            log_T2 = 2 * log_S3 - log_R2  # Time for building lists in level 2 from Odlyzko.
+
+            # Analyse level 1 (using Howard-Graham):
+            log_R1 = log_comb(n - 2 * w0, eps1, eps1) + 2 * log_comb(w0, w0 // 2)
+            log_T1 = 2 * log_S2 - log_R1 - log_R2  # Time for building the lists in level 1
+
+            log_time_lists = sum_log(
+                log_T1 + log(2),  # 2 * T1
+                log_T2 + log(4),  # 4 * T2
+                log_T3 + log(8),  # 8 * T3
+            )
+
+            # Take `r_1, r_2` giving a probability >= 1/e that a representation survives.
+            r1 = floor(log_R1 / logq)
+            r2 = floor(log_R2 / logq)
+
+            # Analyse the runtime
+            log_time_guess = RR((r1 + 1) / 2) * log(error_width)
+            log_runtime = log_time_guess + log_time_lists
+
+            # Probability that the correct solution is found. When taking the floor for r_1, this
+            # should be >= 1/e, and very close to 1 in practice.
+            prob_rep_survives = bernoulli_success(-r1 * logq, log_R1)
+            # Probability that the weight splits equally over the two halfs, during Odlyzko.
+            # Note: Stirling's approximation yields:
+            # exp(log_bet) ~ 2/pi * sqrt(n / (w0 * w0 * (n - 2*w0))) >= 3 / n.
+            log_bet = 2 * log_comb(n // 2, w0 // 2, w0 // 2) - log_comb(n, w0, w0)
+            repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
+
+            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
+            cost.register_impermanent(rop=True, mem=False)
+            cost = cost.repeat(repetitions)
+
+            # cost += {'T_1': exp(log_T1), 'T_2': exp(log_T2), 'T_3': exp(log_T3)}
+            cost += {'r_1': r1, 'r_2': r2, 'epsilon_1': eps1, 'epsilon_2': eps2}
+            cost['tag'] = 'REP-1 (d=3)'
+            return cost
+
+        eps1 = int(round(n * self._asymptotic.optimal_epsilon(3, w0 / 2 / n)))
+        eps2 = int(round(n * self._asymptotic.optimal_epsilon(2, (w0 / 2 + eps1) / 2 / n)))
+        best = optimize_eps(eps1, eps2)
+        # Find the optimal `r` here by iteratively incrementing `eps_1` and/or `eps_2`.
+        while True:
+            # Also try incrementing eps1 by 2, because it changes w2 after rounding down.
+            # This ordering gave the best results when running on NTRU (Prime), BLISS, and GLP.
+            for (delta1, delta2) in [(1, 0), (2, 0), (0, 1)]:
+                cost = optimize_eps(eps1 + delta1, eps2 + delta2)
+                if cost < best:
+                    best = cost
+                    eps1 += delta1
+                    eps2 += delta2
+                    break
+            else:
+                # No improvement, stop.
+                break
+        return best
 
     def __call__(
         self,
@@ -386,7 +555,9 @@ class MeetREP1:
         target_probability=0.99,
         **kwds,
     ):
-        return self.depth2(params, target_probability, *kwds)
+        d_2 = self.depth2(params, target_probability, *kwds)
+        d_3 = self.depth3(params, target_probability, *kwds)
+        return min(d_2, d_3)
 
 
 odlyzko = Odlyzko()
