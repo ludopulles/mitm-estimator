@@ -51,7 +51,7 @@ def bisect_false_true(f, lo: int, hi: int):
     return hi
 
 
-# Low beta Gaussian Heuristic constant for use in NTRU Dense sublattice estimation.
+# Low beta Gaussian Heuristic constants:
 gh_constant = {1: 0.00000, 2: -0.50511, 3: -0.46488, 4: -0.39100, 5: -0.29759, 6: -0.24880, 7: -0.21970, 8: -0.15748,
                9: -0.14673, 10: -0.07541, 11: -0.04870, 12: -0.01045, 13: 0.02298, 14: 0.04212, 15: 0.07014,
                16: 0.09205, 17: 0.12004, 18: 0.14988, 19: 0.17351, 20: 0.18659, 21: 0.20971, 22: 0.22728, 23: 0.24951,
@@ -74,15 +74,22 @@ small_slope_t8 = {2: 0.04473, 3: 0.04472, 4: 0.04402, 5: 0.04407, 6: 0.04334, 7:
 
 @cached_function
 def ball_log_vol(n):
+    """
+    return ln(volume of n-dimensional ball)
+    """
     return RR((n/2.) * log(pi) - lgamma(n/2. + 1))
 
 
-def log_gh(d, logvol=0):
+def log_gh(d, logvol=0, use_constant=True):
     """
-    Gaussian Heuristic in dimension `d`.
+    return natural logarithm of an estimate of what the length is of the shortest vector in a
+    lattice of rank `d` and determinant `e**logvol`.
+
+    (used in LWE.primal_hybrid, RC.ZGSA and NTRU.primal_dsd)
     """
-    if d <= 50:
+    if use_constant and d < 49:
         return RR(gh_constant[d] + logvol/d)
+
     return RR(1./d * (logvol - ball_log_vol(d)))
 
 

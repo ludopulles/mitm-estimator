@@ -6,7 +6,7 @@ See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
 from functools import partial
-from sage.all import oo, ceil, sqrt, log, RR, ZZ, binomial, cached_function
+from sage.all import oo, ceil, exp, sqrt, log, RR, binomial, cached_function
 
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
@@ -21,8 +21,7 @@ from .prob import mitm_babai_probability
 from .reduction import cost as costf
 from .reduction import delta as deltaf
 from .simulator import normalize as simulator_normalize
-from .util import babai_cost, local_minimum
-
+from .util import babai_cost, local_minimum, log_gh
 
 class PrimalUSVP:
     """
@@ -287,40 +286,46 @@ primal_usvp = PrimalUSVP()
 
 class PrimalHybrid:
     @classmethod
-    def svp_dimension(cls, r, D):
+    def svp_dimension(cls, r, beta, D):
         """
-        Return η for a given lattice shape and distance.
+        Return η for a given lattice shape and distance, using the success condition specified in [USENIX:ADPS16]_.
 
         :param r: squared Gram-Schmidt norms
+        :param beta: blocksize used to get this basis profile
+        :param D: error distribution
 
         """
-        from math import lgamma, log, exp, pi
+        # Find smallest eta ∈ [2, d] satisfying the success condition from [USENIX:ADPS16]_.
+        # However, important detail: to prevent false positives, first try eta ∈ [beta, d].
+        d, eta = len(r), beta
+        log_proj_vol = sum(0.5 * log(r_i) for r_i in r[d - eta:])
+        # Loop invariant:
+        # log_proj_vol = log(Vol(Lambda(b_{d-eta}, b_{d-eta+1}, ..., b_{d-1})))
 
-        def ball_log_vol(n):
-            return (n / 2.0) * log(pi) - lgamma(n / 2.0 + 1)
+        def has_success():
+            # Assumes log_proj_vol = log(Vol(Lambda(b_{d-eta}, b_{d-eta+1}, ..., b_{d-1})))
+            return D.stddev**2 * eta <= exp(2.0 * log_gh(eta, log_proj_vol, False))
 
-        def gaussian_heuristic_log_input(r):
-            n = len(list(r))
-            log_vol = sum(r)
-            log_gh = 1.0 / n * (log_vol - 2 * ball_log_vol(n))
-            return exp(log_gh)
-
-        d = len(r)
-        r = [log(x) for x in r]
-
-        if d > 4096:
-            for i, _ in enumerate(r):
-                # chosen since RC.ADPS16(1754, 1754).log(2.) = 512.168000000000
-                j = d - 1754 + i
-                if (j < d) and (gaussian_heuristic_log_input(r[j:]) < D.stddev**2 * (d - j)):
-                    return ZZ(d - (j - 1))
-            return ZZ(2)
-
+        if has_success():
+            # It appears the size of our SVP call can be even smaller than beta. Now, we iteratively decrease eta as
+            # long as the success condition still holds. We cannot start from checking eta=2, because the success
+            # condition cannot be trusted in extremely low dimensions because the basis is HKZ-reduced in block
+            # [d-beta, d).
+            while eta >= 2 and has_success():
+                # Decrease eta by one, and update the volume
+                log_proj_vol -= 0.5 * log(r[d - eta])
+                eta -= 1
+            eta += 1  # eta >= 2
         else:
-            for i, _ in enumerate(r):
-                if gaussian_heuristic_log_input(r[i:]) < D.stddev**2 * (d - i):
-                    return ZZ(d - (i - 1))
-            return ZZ(2)
+            # It appears we need to increase eta until we have success.
+            # The number 1754 is chosen since RC.ADPS16(1754, 1754).log(2.) > 512.0
+            while eta < d + 1 and eta < 1754 and not has_success():
+                # Increase eta by one, and update the volume
+                eta += 1
+                log_proj_vol += 0.5 * log(r[d - eta])
+            # Note: if eta = d + 1, this indicates that there is no success possible. This means that in a higher
+            # layer, you should try again with a larger value of beta to get stronger lattice reduction.
+        return eta
 
     @staticmethod
     @cached_function
@@ -481,7 +486,7 @@ class PrimalHybrid:
             svp_cost = Cost(rop=babai_cost(d))
         else:
             # we scaled the lattice so that χ_e is what we want
-            eta = PrimalHybrid.svp_dimension(r, params.Xe)
+            eta = PrimalHybrid.svp_dimension(r, beta, params.Xe)
             if eta > d:
                 # Lattice reduction was not strong enough to "reveal" the LWE solution.
                 # A larger `beta` should perhaps be attempted.
