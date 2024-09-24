@@ -370,9 +370,9 @@ class PrimalHybrid:
             svp_cost = Cost(rop=babai_cost(d))
         else:
             # we scaled the lattice so that χ_e is what we want
-            eta = PrimalHybrid.svp_dimension(r, params.Xe)
+            eta = PrimalHybrid.svp_dimension(r, beta, params.Xe)
             # r2 = simulator(d, subparams.n, params.q, beta, xi=xi2, tau=tau, dual=True)
-            # print(f"Alternative eta: {PrimalHybrid.svp_dimension(r2, params.Xe)}")
+            # print(f"Alternative eta: {PrimalHybrid.svp_dimension(r2, beta, params.Xe)}")
 
             if eta > d:
                 # Lattice reduction was not strong enough to "reveal" the LWE solution.
