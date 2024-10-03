@@ -8,7 +8,7 @@ See :ref:`LWE Dual Attacks` for an introduction what is available.
 
 from functools import partial
 
-from sage.all import oo, ceil, sqrt, log, cached_function, RR, exp, pi, e, coth, tanh
+from sage.all import oo, binomial, ceil, sqrt, log, cached_function, RR, exp, pi, e, coth, tanh, round
 
 from .reduction import delta as deltaf
 from .util import local_minimum, early_abort_range
@@ -18,7 +18,7 @@ from .prob import drop as prob_drop, amplify as prob_amplify
 from .io import Logging
 from .conf import red_cost_model as red_cost_model_default, mitm_opt as mitm_opt_default
 from .errors import OutOfBoundsError, InsufficientSamplesError
-from .nd import DiscreteGaussian, SparseTernary
+from .nd import DiscreteGaussian, SparseTernary, sigmaf
 from .lwe_guess import exhaustive_search, mitm, distinguish
 
 
@@ -421,7 +421,7 @@ class DualHybrid:
             red=True,
             beta=False,
             delta=False,
-            m=True,
+            m=False,
             d=False,
             zeta=False,
             t=False,
@@ -717,7 +717,7 @@ def dual(
         red=True,
         beta=False,
         delta=False,
-        m=True,
+        m=False,
         d=False,
     )
 
@@ -792,3 +792,342 @@ def dual_hybrid(
     else:
         ret["tag"] = "dual_hybrid"
     return ret
+
+
+####################################################################################################
+class CHHS19:
+    """
+    Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+    """
+
+    MEMORY_BOUND = 2**80
+
+    @staticmethod
+    @cached_function
+    def cost_guessing(n: int, zeta: int, h: int, h0: int):
+        """
+        Return all data related to guessing `zeta` coefficients out of `n`, having a hamming weight of `h0` out of
+        total `h`.
+
+        :return: A tuple
+
+        The returned tuple jonsists of the following four values:
+
+        - time to search for all these keys (using MitM).
+        - memory required to run this MitM algorithm.
+        - probability that the secret splits in this way, assuming you apply a random permutation on the secret
+          coefficients.
+        - log(search space size)
+        """
+        # Split search space Odlyzko style:
+        zeta_1, h_1 = (zeta + 1) // 2, (h0 + 1) // 2  # Take ceiling
+        S_1 = binomial(zeta_1, h_1) * 2**h_1
+
+        #
+        # If you want to bound the memory cost, uncomment below:
+        #
+        # while S_1 > CHHS19.MEMORY_BOUND:
+        #     h_1 -= 1
+        #     zeta_1 = int(round(RR(zeta * h_1 / h)))
+        #     S_1 = binomial(zeta_1, h_1) * 2**h_1
+
+        zeta_2, h_2 = zeta - zeta_1, h0 - h_1
+        S_2 = binomial(zeta_2, h_2) * 2**h_2
+
+        time_search = S_1 + S_2
+        mem_search = min(S_1, S_2)
+        p_split = RR(binomial(zeta_1, h_1) * binomial(zeta_2, h_2) * binomial(n - zeta, h - h0) / binomial(n, h))
+        log_search_space = RR(log(S_1) + log(S_2))
+        return (time_search, mem_search, p_split, log_search_space)
+
+    def cost(
+        self,
+        params: LWEParameters,
+        beta: int,
+        zeta: int,
+        h0: int = None,
+        success_probability: float = 0.99,
+        red_cost_model=red_cost_model_default,
+        log_level=1,
+        only_works=False,
+    ):
+        """
+        Cost of the [EPRINT:CHHS19]_ attack.
+        Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+        :param params: LWE parameters
+        :param beta: Block size used to produce short dual vectors
+        :param zeta: Guessing dimension ζ ≥ 0.
+        :param h0: Number of non-zero components expected in the guessed secret.
+        :param success_probability: The success probability to target
+        :param red_cost_model: How to cost lattice reduction
+        :param only_works: whether to return only if attack can work or not, instead of returning cost.
+
+        .. note :: This is the lowest level function that runs no optimization, it merely reports
+           costs.
+
+        """
+        n, h = params.n, params.Xs.hamming_weight
+        delta = deltaf(beta)
+
+        Cost.register_impermanent(
+            rop=True, red=True,
+            mem=False, p=False, beta=False, zeta=False, h_=False, m=False, d=False, m_=False
+        )
+
+        if h0 is None:
+            # Pick h0 most balanced possible.
+            h0 = int(round(RR(h * zeta / n)))
+
+        # Compute complexity of this search space:
+        t_search, mem_search, p_search, log_ss = self.cost_guessing(n, zeta, h, h0)
+
+        if h0 == h:
+            if only_works:
+                return True
+            # This basically boils down to MitM search
+            cost = Cost(rop=params.m * t_search, mem=mem_search, p=RR(p_search), beta=beta, zeta=zeta, h_=h0)
+            rep = prob_amplify(success_probability, cost["p"])
+            return cost.repeat(times=rep) if rep > 1 else cost
+
+        # xi is the scaling factor for the secret such that `xi s_2` and `e` have the same standard deviation,
+        # where s_1 is the non-guessed secret, assumed to be of weight `h - h0`, and dimension `n - zeta`.
+        var_s1 = (h - h0) / (n - zeta)
+        xi = params.Xe.stddev / sqrt(var_s1)
+        assert xi > 1
+        m = min(params.m, int(round(RR(sqrt((n - zeta) * log(params.q / xi) / log(delta)) - (n - zeta)))))
+        d = m + n - zeta
+
+        log_det = (n - zeta) * log(params.q / xi)
+        # ell: length of shortest vector after BKZ-beta
+        ell = delta**d * exp(log_det / d)
+
+        # <y2, xi s1> + <y1, e>,
+        # where:
+        # - (y1, y2) \in Lambda^\perp(A_2),
+        # - `xi s1 \in xi ZZ^n` (stddev ~params.Xe.stddev),
+        # - `e \in ZZ^m (stddev params.Xe.stddev).
+        # B: infinity-norm bound on error e' of "new" LWE instance.
+        B = 2.0 * sigmaf(params.Xe.stddev) * ell
+
+        works = ell < params.q / 2.0 and B < params.q / 4.0
+        if only_works:
+            return works
+        if not works:
+            return Cost(rop=oo)
+
+        # Number of dual vectors that we want (i.e. number of samples for "new" LWE instance)
+        tau = int(round(RR(log_ss / (1.0 - 4 * B / params.q))))
+
+        # Time for running BKZ with blocksize beta in dimension d.
+        _, t_BKZ, tau_, beta_ = red_cost_model.short_vectors(beta, d, N=tau, B=log(params.q, 2))
+        if tau_ != tau or beta_ != 2:
+            # Just do it ourselves...
+            t_BKZ = red_cost_model(beta, d, B=log(params.q, 2))
+            t_BKZ += (tau - 1) * red_cost_model.LLL(d, log(params.q, 2))
+            t_BKZ = RR(t_BKZ)
+        # assert tau_ == tau and beta_ == 2
+        # Assume we used LLL for the other vectors. Is not required for the algorithm.
+
+        # Note: the paper [CHHS19]_ incorrectly reports that this probability should have exponent `m` in Theorem 1,
+        # but it should be `tau`.
+        p_error_bounded = (1.0 - 2 * exp(-4*pi))**tau
+
+        cost = Cost(
+            rop=t_BKZ + m * t_search, red=t_BKZ,  # Runtime
+            mem=mem_search,  # Memory
+            p=RR(p_search * p_error_bounded),  # Success probability
+            beta=beta, zeta=zeta, h_=h0, m=m, d=d, m_=tau,  # Parameters
+        )
+
+        # print(f"beta={beta}, zeta={zeta}, h0={h0}: T_BKZ = {float(t_BKZ):.2e}, T_search = {float(time_search):.2e}")
+        rep = prob_amplify(success_probability, cost["p"])
+        # return (t_BKZ * rep, time_search * rep)
+        if rep > 1:
+            cost = cost.repeat(times=rep)
+        return cost
+
+    def minimal_zeta_needed(
+        self,
+        params: LWEParameters,
+        beta: int,
+        h0: int
+    ):
+        """
+        Returns a pair (a, b) that indicates that the smallest `zeta` for which the dual attack works, satisfies:
+
+            `a <= zeta <= b`.
+
+        Note here that this bound on zeta is to make sure that lattice reduction finds short enough dual vectors in the
+        remaining small-secret embedding lattice of dimension `m + n - zeta`, where `m` is chosen optimally, i.e.
+
+            `m = sqrt((n - zeta) log(q/xi) / log(deltaf(beta))) - (n - zeta)`.
+        """
+        h = params.Xs.hamming_weight
+        required_ell = params.q / (8 * sqrt(pi) * params.Xe.stddev)
+
+        # n - zeta:
+        RHS = 0.25 * log(required_ell)**2 / log(deltaf(beta))
+        A = log(params.q * sqrt(h - h0) / params.Xe.stddev)
+
+        x_0 = RR(RHS / A)
+        # Perform one iteration of the Newton--Raphson root finding algorithm regarding the equation:
+        #  f(x) = 2Ax - x log(x) - RHS = 0
+        #  f'(x) = 2A - log(x) - 1
+        #  x_{i+1} = x_i - f(x_i) / f'(x_i).
+        x_1 = RR((2 * RHS - x_0) / (2 * A - log(x_0) - 1))
+
+        # `n - zeta \in [x_0, x_1]` which corresponds to `\zeta \in [n - x_1, n - x_0]`.
+        zeta_1 = max(0, min(params.n, int(ceil(RR(params.n - x_1)))))
+        zeta_2 = max(0, min(params.n, int(ceil(RR(params.n - x_0)))))
+        return [zeta_1, zeta_2]
+
+    def cost_beta(
+        self,
+        params: LWEParameters,
+        beta: int,
+        h0: int = None,
+        success_probability: float = 0.99,
+        red_cost_model=red_cost_model_default,
+        log_level=1,
+    ):
+        """
+        Cost of the [EPRINT:CHHS19]_ attack for a particular beta.
+        Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+        :param params: LWE parameters
+        :param beta: Block size used to produce short dual vectors
+        :param h0: Number of non-zero components expected in the guessed secret.
+        :param success_probability: The success probability to target
+        :param red_cost_model: How to cost lattice reduction
+
+        """
+        # Optimize guessing dimension zeta.
+        zeta_lo, max_zeta = self.minimal_zeta_needed(params, beta, h0)
+
+        f = partial(
+            self.cost,
+            params=params,
+            beta=beta,
+            h0=h0,
+            success_probability=success_probability,
+            red_cost_model=red_cost_model,
+            log_level=log_level + 1,
+            only_works=True,
+        )
+        zeta_hi = max_zeta
+        # Perform a binary search to find smallest zeta such that the attack can work.
+        while zeta_hi - zeta_lo >= 2:
+            zeta = (zeta_lo + zeta_hi) // 2
+            if f(zeta=zeta):
+                # The attack works.
+                zeta_hi = zeta
+            else:
+                # The attack does not work.
+                zeta_lo = zeta
+        min_zeta = zeta_hi  # For zeta_hi, the attack works.
+        Logging.log("dual", log_level, f"Range ζ is [{min_zeta}..{max_zeta}]")
+        with local_minimum(min_zeta, max_zeta + 1, precision=4, log_level=log_level + 1) as it:
+            f = partial(
+                self.cost,
+                params=params,
+                beta=beta,
+                success_probability=success_probability,
+                red_cost_model=red_cost_model,
+                log_level=log_level + 1,
+            )
+
+            # Cheat: use minimal zeta.
+            return f(zeta=min_zeta)
+            for zeta in it:
+                it.update(f(zeta=zeta))
+            # for zeta in it.neighborhood:
+            #     it.update(f(zeta=zeta))
+            cost = it.y
+        return cost
+
+    def cost_h0(
+        self,
+        params: LWEParameters,
+        h0: int = None,
+        success_probability: float = 0.99,
+        red_cost_model=red_cost_model_default,
+        log_level=1,
+    ):
+        """
+        Cost of the [EPRINT:CHHS19]_ attack for a particular h0.
+
+        Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+        :param params: LWE parameters
+        :param h0: Number of non-zero components expected in the guessed secret.
+        :param success_probability: The success probability to target
+        :param red_cost_model: How to cost lattice reduction
+
+        """
+        # Step 0. Establish a baseline when guessing half of the coefficients.
+        max_beta = max(2 * params.n, 40)
+        zeta_0 = params.n // 2
+
+        # TODO: this part does not really depend on beta.
+
+        with local_minimum(40, max_beta + 1, precision=5, log_level=log_level + 1) as it:
+            f = partial(
+                self.cost,
+                params=params,
+                zeta=zeta_0,
+                h0=h0,
+                success_probability=success_probability,
+                red_cost_model=red_cost_model,
+                log_level=log_level + 1,
+            )
+
+            for beta in it:
+                it.update(f(beta=beta))
+            max_beta = it.x
+            cost = it.y
+
+        Logging.log("dual", log_level, f"h0={h0} --> β_max = {max_beta}, cost = {repr(cost)}")
+
+        # Step 1. Optimize blocksize beta (while also optimizing zeta).
+        with local_minimum(40, max_beta + 1, precision=2, log_level=log_level + 1) as it:
+            f = partial(
+                self.cost_beta,
+                params=params,
+                h0=h0,
+                success_probability=success_probability,
+                red_cost_model=red_cost_model,
+                log_level=log_level + 1,
+            )
+
+            for beta in it:
+                it.update(f(beta=beta))
+            # for beta in it.neighborhood:
+            #     it.update(f(beta=beta))
+            cost = it.y
+        return cost
+
+    def __call__(
+        self,
+        params: LWEParameters,
+        success_probability: float = 0.99,
+        red_cost_model=red_cost_model_default,
+        log_level=1,
+    ):
+        """
+        :param params: LWE parameters
+        :param beta: Block size used to produce short dual vectors for dual reduction
+        :param zeta: Dimension ζ ≥ 0 of new LWE instance
+        :param h: Number of non-zero components of the secret of the new LWE instance
+        :param success_probability: The success probability to target
+        :param red_cost_model: How to cost lattice reduction
+        """
+        cost, h0 = Cost(rop=oo), -1
+        while True:
+            alternative = self.cost_h0(params, h0 + 1, success_probability, red_cost_model, log_level + 1)
+            Logging.log("dual", log_level, f"h0={h0 + 1} --> {repr(alternative)}")
+            if not alternative < cost:
+                break
+            cost = alternative
+            h0 += 1
+        return cost
+
+
+chhs19 = CHHS19()
