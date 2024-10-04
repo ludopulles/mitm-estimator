@@ -11,6 +11,7 @@ from .lwe_comb import odlyzko, meet_rep0, meet_rep1
 from .lwe_dual import dual, matzov as dual_hybrid
 from .lwe_guess import exhaustive_search, mitm, distinguish, guess_composition  # noqa
 from .lwe_primal import primal_usvp, primal_bdd, primal_hybrid
+from .nd import SparseTernary
 from .gb import arora_gb  # noqa
 from .lwe_parameters import LWEParameters as Parameters  # noqa
 from .conf import (
@@ -126,7 +127,7 @@ class Estimate:
         algorithms["bkw"] = coded_bkw
 
         # Combinatorial Attack
-        if params.Xs.tag == "SparseTernary" and params.Xe.is_bounded and params.Xs.mean == 0:
+        if type(params.Xs) is SparseTernary and params.Xe.is_bounded and params.Xs.mean == 0:
             algorithms['Odlyzko MitM'] = partial(
                 odlyzko, red_cost_model=red_cost_model, red_shape_model=red_shape_model
             )

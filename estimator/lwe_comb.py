@@ -9,6 +9,7 @@ from sage.all import binomial, exp, floor, log, oo, round, RR
 
 from .cost import Cost
 from .lwe_parameters import LWEParameters
+from .nd import SparseTernary
 from .prob import amplify as prob_amplify
 
 
@@ -89,12 +90,12 @@ class Odlyzko:
         :return: the cost to run this attack
         """
         # Check for ternary instead of sparse ternary.
-        assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
+        assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
         # Note: Odlyzko easily extends beyond "mean = 0
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
-        n, w0 = params.n, params.Xs.get_hamming_weight(params.n) // 2
+        n, w0 = params.n, params.Xs.hamming_weight // 2
 
         nl, nr = split_weight(n)
         wl, wr = split_weight(w0)
@@ -150,7 +151,7 @@ class MeetREP0:
         EXAMPLE::
 
             >>> from estimator import *
-            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(10))
+            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(10), Xe=ND.UniformMod(10))
             >>> LWE.meet_rep0(params)
             rop: ≈2^59.7, mem: ≈2^45.8, ↻: ≈2^13.9, r: 3, tag: REP-0 (d=2)
 
@@ -159,7 +160,7 @@ class MeetREP0:
         # params = LWEParameters.normalize(params)
 
         # Check for ternary instead of sparse ternary.
-        assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
+        assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
@@ -167,7 +168,7 @@ class MeetREP0:
         n1, n2 = split_weight(n)
         error_width = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
         # The secret has `w0` coefficients equal to 1, and `w0` equal to -1.
-        w0 = params.Xs.get_hamming_weight(n) // 2
+        w0 = params.Xs.hamming_weight // 2
         w1, w2 = split_weight(w0)
         w11, w12 = split_weight(w1)
         w21, w22 = split_weight(w2)
@@ -362,7 +363,7 @@ class MeetREP1:
         EXAMPLE::
 
             >>> from estimator import *
-            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(200, 10), Xe=ND.UniformMod(10))
+            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(10), Xe=ND.UniformMod(10))
             >>> LWE.meet_rep1(params)
             rop: ≈2^59.1, mem: ≈2^50.3, ↻: 452, r: 4, ε: 1, tag: REP-1 (d=2)
 
@@ -371,7 +372,7 @@ class MeetREP1:
         # params = LWEParameters.normalize(params)
 
         # Check for ternary instead of sparse ternary.
-        assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
+        assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
@@ -379,7 +380,7 @@ class MeetREP1:
         n1, n2 = split_weight(n)
         error_width = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
         # The secret has `w0` coefficients equal to 1, and `w0` equal to -1.
-        w = params.Xs.get_hamming_weight(n)
+        w = params.Xs.hamming_weight
         w0 = w // 2
         w1, w2 = split_weight(w0)
 
@@ -470,7 +471,7 @@ class MeetREP1:
         # params = LWEParameters.normalize(params)
 
         # Check for ternary instead of sparse ternary.
-        assert params.Xs.tag == "SparseTernary", "Secret distribution has to be ternary."
+        assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
@@ -478,7 +479,7 @@ class MeetREP1:
         error_width = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
 
         # The secret has `w0` coefficients equal to 1, and `w0` equal to -1.
-        w = params.Xs.get_hamming_weight(n)
+        w = params.Xs.hamming_weight
         w0 = w // 2
 
         def optimize_eps(eps1, eps2):
