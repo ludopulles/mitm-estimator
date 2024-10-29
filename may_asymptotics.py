@@ -255,6 +255,24 @@ def plot_algorithms(max_depth=3):
                   *[f'{t:11.4f},' for t in REP1],
                   file=f)
 
+    with open(f'may_asymptotics_ratio_depth{max_depth}.csv', 'w') as f:
+        print('omega, lg |S|, Odlyzko, Howgrave-Graham,',
+              *[f'REP-0 (d={d}),' for d in depths],
+              *[f'REP-1 (d={d}),' for d in depths], file=f)
+        for omega in omegas:
+            ss = lgS(omega)
+            odly = odlyzko(omega)
+            hw = howgrave_graham(omega)
+
+            REP0 = [meet_rep0(d, omega) for d in depths]
+            REP1 = [meet_rep1(d, omega) for d in depths]
+
+            print(f'{omega:8.6f}, {1.0:8.6f}, {odlyzko(omega) / ss:8.6f}, '
+                  f'{howgrave_graham(omega) / ss:8.6f},',
+                  *[f'{t / ss:8.6f},' for t in REP0],
+                  *[f'{t / ss:8.6f},' for t in REP1],
+                  file=f)
+
     data = list(zip(*data))
     for label, ys in zip(labels, data):
         plt.plot(omegas, ys, label=label)
