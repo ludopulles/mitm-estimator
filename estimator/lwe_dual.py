@@ -8,7 +8,7 @@ See :ref:`LWE Dual Attacks` for an introduction what is available.
 
 from functools import partial
 
-from sage.all import oo, binomial, ceil, sqrt, log, cached_function, RR, exp, pi, e, coth, tanh
+from sage.all import oo, binomial, ceil, floor, sqrt, log, cached_function, RR, exp, pi, e, coth, tanh
 
 from .reduction import delta as deltaf, cost as costf, sieving_cost
 from .simulator import normalize as simulator_normalize
@@ -1140,6 +1140,7 @@ chhs19 = CHHS19()
 class DualHybridv2:
     """
     Estimate cost of solving LWE using dual attacks.
+    Security level may be higher in practice, as this is optimistic for the attacker.
     """
 
     @staticmethod
@@ -1177,6 +1178,7 @@ class DualHybridv2:
         xi = DualHybridv2._xi_factor(params.Xs, params.Xe)
 
         # 1. Simulate BKZ-β
+        bkz_cost = costf(red_cost_model, beta, d)
         r = simulator(d, params.n, params.q, beta, xi=xi, tau=None, dual=True)
 
         # 2. Look at the lattice generate by the last block of length beta_sieve.
@@ -1184,7 +1186,11 @@ class DualHybridv2:
         # dimension beta - d4f(beta), but does this repeatedly (~8n times).
         # For simplicity, assume these two effects cancel out.
         beta_sieve = beta
-        log_vol = sum(.5 * log(x, 2) for x in r[-beta_sieve:])
+        sieve_cost = sieving_cost(red_cost_model, beta_sieve)
+        num_vectors = sieve_cost["mem"]
+        k_fft = max(floor(log(num_vectors / num_targets)), 1)
+
+        log_vol = sum(.5 * log(x, 2) for x in r[-beta_sieve:]) - log(2**k_fft)
 
         proj_length = params.Xe.stddev * sqrt(beta_sieve)
         proj_gh = exp(log_gh(beta_sieve, log_vol))
@@ -1193,29 +1199,26 @@ class DualHybridv2:
             # It is impossible to distinguish the correct target from uniform targets.
             return Cost(rop=oo)
 
-        if num_targets >= (proj_gh / proj_length)**beta_sieve:
+        if 2**k_fft * num_targets >= (proj_gh / proj_length)**beta_sieve:
             # We are in the concrete contradictory regime of [DP'23].
             # Thus, the attack will not work in expectation.
             return Cost(rop=oo)
 
-        # print(f"beta={beta}: {RR(proj_length):.3f}/{RR(proj_gh):.3f} = {RR(proj_length/proj_gh):.3f} GH.")
-
-        bkz_cost = costf(red_cost_model, beta, d)
-        sieve_cost = sieving_cost(red_cost_model, beta_sieve)
-
         # ret = bkz_cost + sieve_cost
         ret = bkz_cost
         ret["rop"] += sieve_cost["rop"]
+        ret["mem"] = RR(num_vectors * beta_sieve)
 
         # Time to compute the score for each targets.
         # Here, make simplifying assumption that we can run a FFT on all the targets without any
         # issues. Note: this is optimistic in general, as the structure doesn't allow direct
         # application of the FFT. This optimism includes the "modulus switching" technique
         # [MATZOV22], and pretends as if this technique doesn't increase the noise, which it does.
-        ret["rop"] += RR(num_targets * log(num_targets, 2))
+
+        ret["rop"] += RR(num_targets * (num_vectors + 2**k_fft * k_fft))
 
         # Success probability is definitely optimistic here!
-        return ret.combine(Cost(mem=RR(num_targets * beta_sieve), prob=1.0))
+        return ret.combine(Cost(prob=1.0))
 
     @classmethod
     def cost_zeta_(
@@ -1343,7 +1346,7 @@ class DualHybridv2:
                 for zeta_ in it:
                     cost = f(zeta=zeta_, **kwds)
                     it.update(cost)
-                    print("zeta=", zeta_, cost)
+                    Logging.log("dual", log_level, f"ζ={zeta_}: {repr(cost)}")
                 cost = it.y
         else:
             cost = f(zeta=zeta)
@@ -1352,5 +1355,6 @@ class DualHybridv2:
         return cost.sanity_check()
 
     __name__ = "dual_hybrid_LB"
+
 
 dual_hybrid = DualHybridv2()

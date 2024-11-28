@@ -1002,8 +1002,9 @@ def sieving_cost(cost_model, beta):
         RR(cost_model.NN_AGPS[cost_model.nn]["a"]) * beta
         + RR(cost_model.NN_AGPS[cost_model.nn]["b"])
     )
-    cost_ = Cost(rop=time, red=time, beta=beta)
-    cost_.register_impermanent(rop=True, red=True, beta=False)
+    num_vectors = RR((4.0/3.0)**(beta / 2))
+    cost_ = Cost(rop=time, red=time, beta=beta, mem=num_vectors)
+    cost_.register_impermanent(rop=True, red=True, beta=False, mem=False)
     return cost_
 
 
