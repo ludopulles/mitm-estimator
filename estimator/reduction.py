@@ -993,6 +993,20 @@ def cost(cost_model, beta, d, B=None, predicate=True, **kwds):
     return cost
 
 
+def sieving_cost(cost_model, beta):
+    # convenience: instantiate static classes if needed
+    if isinstance(cost_model, type):
+        cost_model = cost_model()
+
+    time = 2.0 ** (
+        RR(cost_model.NN_AGPS[cost_model.nn]["a"]) * beta
+        + RR(cost_model.NN_AGPS[cost_model.nn]["b"])
+    )
+    cost_ = Cost(rop=time, red=time, beta=beta)
+    cost_.register_impermanent(rop=True, red=True, beta=False)
+    return cost_
+
+
 beta = ReductionCost.beta
 delta = ReductionCost.delta
 

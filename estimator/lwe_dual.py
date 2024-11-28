@@ -8,10 +8,11 @@ See :ref:`LWE Dual Attacks` for an introduction what is available.
 
 from functools import partial
 
-from sage.all import oo, binomial, ceil, sqrt, log, cached_function, RR, exp, pi, e, coth, tanh, round
+from sage.all import oo, binomial, ceil, sqrt, log, cached_function, RR, exp, pi, e, coth, tanh
 
-from .reduction import delta as deltaf
-from .util import local_minimum, early_abort_range
+from .reduction import delta as deltaf, cost as costf, sieving_cost
+from .simulator import normalize as simulator_normalize
+from .util import local_minimum, early_abort_range, bisect_false_true, log_gh
 from .cost import Cost
 from .lwe_parameters import LWEParameters
 from .prob import drop as prob_drop, amplify as prob_amplify
@@ -20,6 +21,8 @@ from .conf import red_cost_model as red_cost_model_default, mitm_opt as mitm_opt
 from .errors import OutOfBoundsError, InsufficientSamplesError
 from .nd import DiscreteGaussian, SparseTernary, sigmaf
 from .lwe_guess import exhaustive_search, mitm, distinguish
+from .conf import red_shape_model as red_shape_model_default
+from .conf import red_simulator as red_simulator_default
 
 
 class DualHybrid:
@@ -1131,3 +1134,223 @@ class CHHS19:
 
 
 chhs19 = CHHS19()
+
+
+####################################################################################################
+class DualHybridv2:
+    """
+    Estimate cost of solving LWE using dual attacks.
+    """
+
+    @staticmethod
+    def _xi_factor(Xs, Xe):
+        xi = RR(1)
+        if Xs < Xe:
+            xi = Xe.stddev / Xs.stddev
+        return xi
+
+    @staticmethod
+    @cached_function
+    def cost(
+        beta: int,
+        params: LWEParameters,
+        num_targets: int,
+        simulator=red_simulator_default,
+        red_cost_model=red_cost_model_default,
+        log_level=5,
+    ):
+        """
+        Cost of the hybrid attack.
+
+        :param beta: Block size.
+        :param params: LWE parameters.
+        :param zeta: Guessing dimension ζ ≥ 0.
+
+        .. note :: This is the lowest level function that runs no optimization, it merely reports
+           costs.
+
+        """
+        assert not params._homogeneous
+
+        delta = deltaf(beta)
+        d = min(ceil(sqrt(params.n * log(params.q) / log(delta))), params.n + params.m)
+        xi = DualHybridv2._xi_factor(params.Xs, params.Xe)
+
+        # 1. Simulate BKZ-β
+        r = simulator(d, params.n, params.q, beta, xi=xi, tau=None, dual=True)
+
+        # 2. Look at the lattice generate by the last block of length beta_sieve.
+        # We want to balance the cost of BKZ and sieving. Note that BKZ makes a call to a sieve in
+        # dimension beta - d4f(beta), but does this repeatedly (~8n times).
+        # For simplicity, assume these two effects cancel out.
+        beta_sieve = beta
+        log_vol = sum(.5 * log(x, 2) for x in r[-beta_sieve:])
+
+        proj_length = params.Xe.stddev * sqrt(beta_sieve)
+        proj_gh = exp(log_gh(beta_sieve, log_vol))
+
+        if proj_length >= proj_gh:
+            # It is impossible to distinguish the correct target from uniform targets.
+            return Cost(rop=oo)
+
+        if num_targets >= (proj_gh / proj_length)**beta_sieve:
+            # We are in the concrete contradictory regime of [DP'23].
+            # Thus, the attack will not work in expectation.
+            return Cost(rop=oo)
+
+        # print(f"beta={beta}: {RR(proj_length):.3f}/{RR(proj_gh):.3f} = {RR(proj_length/proj_gh):.3f} GH.")
+
+        bkz_cost = costf(red_cost_model, beta, d)
+        sieve_cost = sieving_cost(red_cost_model, beta_sieve)
+
+        # ret = bkz_cost + sieve_cost
+        ret = bkz_cost
+        ret["rop"] += sieve_cost["rop"]
+
+        # Time to compute the score for each targets.
+        # Here, make simplifying assumption that we can run a FFT on all the targets without any
+        # issues. Note: this is optimistic in general, as the structure doesn't allow direct
+        # application of the FFT. This optimism includes the "modulus switching" technique
+        # [MATZOV22], and pretends as if this technique doesn't increase the noise, which it does.
+        ret["rop"] += RR(num_targets * log(num_targets, 2))
+
+        # Success probability is definitely optimistic here!
+        return ret.combine(Cost(mem=RR(num_targets * beta_sieve), prob=1.0))
+
+    @classmethod
+    def cost_zeta_(
+        cls,
+        params: LWEParameters,
+        num_targets: int,
+        simulator=red_simulator_default,
+        red_cost_model=red_cost_model_default,
+        log_level=5,
+        **kwds,
+    ):
+        # Find smallest beta such that the correct solution is below GH of that block.
+        def g(beta):
+            return DualHybridv2.cost(
+                beta, params, num_targets, simulator, red_cost_model, log_level, **kwds
+            )
+
+        def f(beta):
+            return g(beta)["rop"] < oo
+
+        d = params.n + params.m if params.m < oo else 2 * params.n
+        opt_beta = 40 if f(40) else bisect_false_true(f, 40, d)
+        cost = g(opt_beta)
+        cost["|S|"] = num_targets
+        return cost
+
+    @classmethod
+    def cost_zeta(
+        cls,
+        zeta: int,
+        params: LWEParameters,
+        simulator=red_simulator_default,
+        red_cost_model=red_cost_model_default,
+        log_level=5,
+        **kwds,
+    ):
+        """
+        This function optimizes costs for a fixed guessing dimension ζ.
+        """
+        if params.Xs.is_sparse:
+            def cost_h(h):
+                if h == 0:
+                    # For h=0 perform custom code:
+                    search_space = 1
+                    reduced_params = params.updated(n=params.n - zeta)
+                    prob = reduced_params.Xs.support_size() / params.Xs.support_size()
+                else:
+                    sea, red = params.Xs.split_balanced(zeta, h)
+                    prob = params.Xs.split_probability(zeta, h)
+
+                    search_space = sea.support_size()
+                    reduced_params = params.updated(n=params.n - zeta, Xs=red)
+                cost_ = cls.cost_zeta_(
+                    reduced_params, search_space, simulator, red_cost_model, log_level,
+                    **kwds
+                )
+
+                if cost_["rop"] == oo:
+                    return cost_
+                cost_["prob"] *= prob
+                cost_["h"] = h
+                return cost_.repeat(prob_amplify(0.99, prob))
+
+            min_h = max(0, params.Xs.hamming_weight - (params.n - zeta))
+            max_h = min(zeta, params.Xs.hamming_weight)
+
+            cost = min(cost_h(h) for h in range(min_h, max_h + 1))
+        else:
+            # Non-sparse:
+            search_space = params.updated(n=zeta).Xs.support_size()
+            reduced_params = params.updated(n=params.n - zeta)
+            cost = cls.cost_zeta_(
+                reduced_params, search_space, simulator, red_cost_model, log_level, **kwds
+            )
+
+        cost["zeta"] = zeta
+        return cost
+
+    def __call__(
+        self,
+        params: LWEParameters,
+        zeta: int = None,
+        red_shape_model=red_shape_model_default,
+        red_cost_model=red_cost_model_default,
+        log_level=1,
+        **kwds,
+    ):
+        """
+        Estimate the cost of the dual hybrid attack.
+
+        :param params: LWE parameters.
+        :param zeta: Guessing dimension ζ ≥ 0.
+        :return: A cost dictionary
+
+        The returned cost dictionary has the following entries:
+
+        - ``rop``: Total number of word operations (≈ CPU cycles).
+        - ``red``: Number of word operations in lattice reduction.
+        - ``δ``: Root-Hermite factor targeted by lattice reduction.
+        - ``β``: BKZ block size.
+        - ``ζ``: Number of guessed coordinates.
+        - ``prob``: Probability of success in guessing.
+        - ``repeat``: How often to repeat the attack.
+        - ``d``: Lattice dimension.
+        """
+        Cost.register_impermanent(
+            {"|S|": False},
+            rop=True, red=True,
+            mem=False, beta=False, prob=False, h=False
+        )
+
+        params = LWEParameters.normalize(params)
+        simulator = simulator_normalize(red_shape_model)
+
+        f = partial(
+            self.cost_zeta,
+            params=params,
+            simulator=simulator,
+            red_cost_model=red_cost_model,
+            log_level=log_level + 1,
+        )
+
+        if zeta is None:
+            with local_minimum(1, params.n, log_level=log_level) as it:
+                for zeta_ in it:
+                    cost = f(zeta=zeta_, **kwds)
+                    it.update(cost)
+                    print("zeta=", zeta_, cost)
+                cost = it.y
+        else:
+            cost = f(zeta=zeta)
+
+        cost["tag"] = "dual_hybrid_LB"
+        return cost.sanity_check()
+
+    __name__ = "dual_hybrid_LB"
+
+dual_hybrid = DualHybridv2()
