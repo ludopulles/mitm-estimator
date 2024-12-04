@@ -110,6 +110,17 @@ def babai(r, norm):
     return prod(probs)
 
 
+def babai_gaussian(r, stddev):
+    """
+    Babai probability when the target is a gaussian with a standard deviation of `stddev`.
+    """
+    xs = [sqrt(ri / 8.0) / stddev for ri in r]  # .5||b_i*|| / sqrt(2) / sqrt(variance).
+    # Note: the first Gram-Schmidt norms don't influence `p`, as erf(x)~1.
+    p = prod(RR(erf(x)) for x in xs)
+    assert 0.0 <= p <= 1.0
+    return p
+
+
 def drop(n, h, k, fail=0, rotations=False):
     """
     Probability that ``k`` randomly sampled components have ``fail`` non-zero components amongst
