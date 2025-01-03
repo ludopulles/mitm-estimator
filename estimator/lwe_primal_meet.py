@@ -7,7 +7,7 @@ See :ref:`LWE Primal Attacks` for an introduction what is available.
 """
 from functools import partial
 
-from sage.all import oo, cached_function, ceil, floor, log, RR, sqrt
+from sage.all import oo, cached_function, ceil, exp, log, RR, sqrt
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
 from .conf import red_simulator as red_simulator_default
@@ -15,67 +15,99 @@ from .cost import Cost
 from .io import Logging
 from .lwe_comb import AsymptoticMeetREP1, log_comb
 from .lwe_parameters import LWEParameters
-from .lwe_primal import primal_usvp, PrimalUSVP, PrimalHybrid
+from .lwe_primal import primal_usvp, PrimalUSVP
 from .nd import NoiseDistribution, SparseTernary
-from .prob import amplify as prob_amplify
-from .prob import babai_gaussian
-from .reduction import cost as costf
-from .reduction import delta as deltaf
+from .prob import babai_gaussian, mitm_babai_probability, amplify as prob_amplify
+from .reduction import cost as costf, delta as deltaf
 from .simulator import normalize as simulator_normalize
 from .util import local_minimum
+from .lwe_comb import split_weight, sum_log
 
 
-class PrimalMeet(PrimalHybrid):
+class PrimalMeet:
     """
     Estimate cost of solving LWE via a hybrid of primal attack and Meet-LWE [HKLS22].
     """
     _asymptotic = AsymptoticMeetREP1()
 
-    @cached_function
-    def analyze_LSH(
-        self,
-        r,
-        ell: float,
-        stddev: float,
-    ):
-        ns = [floor(ri / ell) for ri in r]
-        lengths = [ri / ni for ri, ni in zip(r, ns)]
-        collide_prob = prod(ni for ni in ns)
-        mitm_prob = mitm_babai_probability(r, stddev)
+    @staticmethod
+    def babai_cost(d):
+        return max(d, 1)**2
 
-    @cached_function
+    @classmethod
     def cost_meet_lwe(
         self,
+        q: int,
         r,
         search_space: SparseTernary,
         Xe: NoiseDistribution
     ):
-        # Figure 6. Parameter search range
-        ell = 6 * Xe.stddev
-        b_lsh = 2 * ell
-        zeta = search_space.n
-        hw = search_space.hamming_weight
+        n = search_space.n
+        n1, n2 = split_weight(n)
 
-        time = 0
-        prob = 1.0
+        # The secret has `w0` coefficients equal to 1, and `w0` equal to -1.
+        w = search_space.hamming_weight
+        w0 = w // 2
+        w1, w2 = split_weight(w0)
 
-        w0 = hw//2  # Expected number of 1's. Equals expected number of -1's.
-        eps1 = int(round(zeta * self._asymptotic.optimal_epsilon(2, w0 / zeta)))
-        w1 = w0 + eps1
+        asymptotic_epsilon = int(round(n * self._asymptotic.optimal_epsilon(2, w0 / n)))
+        w1 += asymptotic_epsilon
+        w2 += asymptotic_epsilon
+
+        w11, w12 = split_weight(w1)
+        w21, w22 = split_weight(w2)
 
         # Number of ways that we can construct s from s1 + s2.
-        log_R = RR(log_comb(zeta - hw, eps1, eps1) + 2 * log_comb(w0, w1 - eps1))
+        log_R1 = (log_comb(n - w, asymptotic_epsilon, asymptotic_epsilon)
+                  + log_comb(w0, w1 - asymptotic_epsilon)
+                  + log_comb(w0, w2 - asymptotic_epsilon))
 
-        # Split s = s1 + s2.
-        # Split s1, s2 Odlyzko-style.
-        # s1, s2 each have w1 +1's and w1 -1's.
-        # Perhaps, search-space size of S1, S2 is already small enough? Do we need more filtering?
-        # If so, what do we condition on?
+        # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched, while
+        # fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
+        # This is slightly naive, but alternatively we could also meet keys somewhere in the intermediate part of
+        # the basis. However, in that case, you need to take the mitm_babai_probability of the meet-buckets, instead of
+        # the Babai domain.
+        logq = RR(log(q))
+        num_qary_vectors = ceil(log_R1 / logq)
+        # assert log_R1 < logq
 
-        # Base on https://github.com/yonghaason/PrimalMeetLWE/blob/main/estimator/estimator.py
-        # Is it correct?
+        logS = {}  # log(size of search space)
+        logL = {}  # log(size of list of stored candidates)
 
-        return time, prob
+        # Analyse level 2.
+        logL[11] = logS[11] = log_comb(n1, w11, w11)
+        logL[12] = logS[12] = log_comb(n2, w12, w12)
+        logL[21] = logS[21] = log_comb(n1, w21, w21)
+        logL[22] = logS[22] = log_comb(n2, w22, w22)
+
+        # Analyse level 1.
+        logS[1] = log_comb(n, w1, w1)
+        logS[2] = log_comb(n, w2, w2)
+        logL[1] = logS[1] - log_R1
+        logL[2] = logS[2] - log_R1
+
+        # Analyse the runtime
+        log_runtime = sum_log(*logL.values())
+        # Multiply the runtime by the number of calls to Babai in dimension `d`.
+        log_runtime += log(PrimalMeet.babai_cost(len(r)))
+
+        # Analyse the success probability
+        prob_rep_survives = mitm_babai_probability(r, Xe.stddev)
+        bet_s1 = logS[11] + logS[12] - logS[1]
+        bet_s2 = logS[21] + logS[22] - logS[2]
+        assert bet_s1 < 0 and bet_s2 < 0
+
+        log_bet = bet_s1 + bet_s2
+        prob = prob_rep_survives * exp(log_bet)
+        # print(f"MEET(2^{RR(log(prob_rep_survives, 2)):.1f}, 2^{RR(log_bet / log(2)):.1f}) ", end="")
+
+        cost = Cost(
+            rop=exp(log_runtime), mem=exp(log_runtime),
+            h_1=w1, h_2=w11, epsilon=asymptotic_epsilon, ell=num_qary_vectors,
+        )
+        cost['r'] = r
+        cost['tag'] = 'REP-0 (d=2)'
+        return cost, prob
 
     @cached_function
     def cost(
@@ -83,8 +115,6 @@ class PrimalMeet(PrimalHybrid):
         params: LWEParameters,
         beta: int,
         zeta: int,
-        m: int = oo,
-        d: int = None,
         simulator=red_simulator_default,
         red_cost_model=red_cost_model_default,
         log_level=5,
@@ -96,27 +126,21 @@ class PrimalMeet(PrimalHybrid):
         :param params: LWE parameters.
         :param zeta: Guessing dimension ζ ≥ 0.
         :param m: We accept the number of samples to consider from the calling function.
-        :param d: We optionally accept the dimension to pick.
 
-        .. note :: This is the lowest level function that runs no optimization, it merely reports
-           costs.
+        .. note :: This is the lowest level function that runs no optimization. It merely reports costs.
 
         """
-        if d is None:
-            delta = deltaf(beta)
-            d = min(ceil(sqrt(params.n * log(params.q) / log(delta))), m) + 1
-        d -= zeta
-
+        delta = deltaf(beta)
+        d = min(ceil(sqrt((params.n - zeta) * log(params.q) / log(delta))), params.m + (params.n - zeta) - 1)
         xi = PrimalUSVP._xi_factor(params.Xs, params.Xe)
-        tau = 1  # TODO: pick τ as non default value
-        if params._homogeneous:
-            tau = False
-            d -= 1
 
         # 1. Simulate BKZ-β
-        r = simulator(d, params.n - zeta, params.q, beta, xi=xi, tau=tau, dual=True)
+        r = simulator(d, params.n - zeta, params.q, beta, xi=xi, tau=None, dual=True)
+        if r[-1] < 12 * params.Xe.stddev:
+            # Lattice reduction should be sufficiently strong such that p_adm is of value >0.1 or so (e.g. 0.5).
+            return Cost(rop=oo)
+
         cost_bkz = costf(red_cost_model, beta, d)
-        cost_svp = PrimalMeet.babai_cost(d)
 
         # 2. Find the best hamming weight of the guess.
         # i.e. iteratively increase the HW until the number of guesses becomes too much.
@@ -124,40 +148,58 @@ class PrimalMeet(PrimalHybrid):
         assert params.Xs.p == params.Xs.m
         h, hw = params.Xs.hamming_weight, 0
         search_space = params.Xs.split_balanced(zeta, hw)[0]
+        num_NP_available = RR(cost_bkz["rop"] / PrimalMeet.babai_cost(d))
         while hw + 2 <= min(h, zeta):
             new_search_space = params.Xs.split_balanced(zeta, hw + 2)[0]
             # Note: exponent 0.25 is very optimistic.
             # Searching all these keys will cost much more time...
-            if cost_svp.repeat(RR(new_search_space.support_size()**0.25))["rop"] >= cost_bkz["rop"]:
+            if RR(new_search_space.support_size()**0.35) >= num_NP_available:
                 break
             search_space = new_search_space
             hw += 2
 
-        r0 = -0
-        cost_meet, prob_meet = self.cost_meet_lwe(r[-r0:], search_space)
-        # prob_meet = mitm_babai_probability(r, params.Xe.stddev)
+        if params.Xs.split_probability(zeta, hw) < 2**-20:
+            # Very unlikely in this attack that the secret splits in this way.
+            # The best attack has very small T/p (T = runtime, p = success probability)
+            # In this case, the runtime is quite large, so it also requires a somewhat large `p`.
+            return Cost(rop=oo)
+
+        cost_meet, prob_meet = self.cost_meet_lwe(params.q, r, search_space, params.Xe)
 
         # Determine success probability:
         probability = (
             # p_HW: probability the secret splits its weight as such:
+            # Note: p_HW ~ 1/n roughly
             params.Xs.split_probability(zeta, hw)
             # p_NP: probability that the correct guess lifts to the correct (s, e).
+            # Note: p_NP ~ 1.0 (p_NP > p_adm).
             * RR(babai_gaussian(r, params.Xe.stddev))
             # p_MEET: probability that Meet-LWE gives the correct answer.
             * prob_meet
         )
 
+        if not probability or RR(probability).is_NaN():
+            return Cost(rop=oo)
+
         ret = Cost(
-            rop=cost_bkz["rop"] + cost_meet,
+            rop=cost_bkz["rop"] + cost_meet["rop"],
             red=cost_bkz["rop"],
-            beta=beta, zeta=zeta, d=d, prob=probability
+            mem=cost_meet["mem"],
+            beta=beta, zeta=zeta, d=d, prob=probability,
+            h_=hw, h_1=cost_meet["h_1"], h_2=cost_meet["h_2"],
+            epsilon=cost_meet["epsilon"],
+            ell=cost_meet["ell"],
         )
         ret["|S|"] = search_space
 
         # 4. Repeat whole experiment ~1/prob times
-        if not probability or RR(probability).is_NaN():
-            return Cost(rop=oo)
-        return ret.repeat(prob_amplify(0.99, probability))
+        ret = ret.repeat(prob_amplify(0.99, probability))
+
+        # print(f"(β={beta}, ζ={zeta}): "
+        #       f"probs {RR(params.Xs.split_probability(zeta, hw)):.8f}, "
+        #       f"{RR(babai_gaussian(r, params.Xe.stddev)):.8f}, "
+        #       f"{RR(prob_meet):.8f} and total runtime 2^{RR(log(ret['rop'], 2)):.1f}")
+        return ret
 
     @classmethod
     def cost_zeta(
@@ -166,9 +208,6 @@ class PrimalMeet(PrimalHybrid):
         params: LWEParameters,
         red_shape_model=red_simulator_default,
         red_cost_model=red_cost_model_default,
-        m: int = oo,
-        babai: bool = True,
-        mitm: bool = True,
         optimize_d=True,
         log_level=5,
         **kwds,
@@ -190,13 +229,11 @@ class PrimalMeet(PrimalHybrid):
 
         f = partial(
             self.cost,
-            params=params,
+            self,
+            params,
             zeta=zeta,
-            babai=babai,
-            mitm=mitm,
             simulator=red_shape_model,
             red_cost_model=red_cost_model,
-            m=m,
             **kwds,
         )
 
@@ -211,16 +248,6 @@ class PrimalMeet(PrimalHybrid):
             cost = it.y
 
         Logging.log("bdd", log_level, f"H1: {cost!r}")
-
-        # step 2. optimize d
-        if cost and cost.get("tag", "XXX") != "usvp" and optimize_d:
-            with local_minimum(
-                params.n, cost["d"] + cost["zeta"] + 1, log_level=log_level + 1
-            ) as it:
-                for d in it:
-                    it.update(f(beta=cost["beta"], d=d))
-                cost = it.y
-            Logging.log("bdd", log_level, f"H2: {cost!r}")
 
         if cost is None:
             return Cost(rop=oo)
@@ -241,18 +268,16 @@ class PrimalMeet(PrimalHybrid):
         params = LWEParameters.normalize(params)
         red_shape_model = simulator_normalize(red_shape_model)
         Cost.register_impermanent(
-            {"|S|": False}, rop=True, red=True, svp=True, zeta=False, prob=False,
+            {"|S|": False}, mem=False, zeta=False, prob=False,
+            h_=False, h_1=False, h_2=False, ell=False, epsilon=False,
+            rop=True, red=True,
         )
-
-        # allow for a larger embedding lattice dimension: Bai and Galbraith
-        m = params.m + params.n if params.Xs <= params.Xe else params.m
 
         f = partial(
             self.cost_zeta,
             params=params,
             red_shape_model=red_shape_model,
             red_cost_model=red_cost_model,
-            m=m,
             log_level=log_level + 1,
         )
 

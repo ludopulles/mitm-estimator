@@ -11,6 +11,7 @@ from .lwe_comb import odlyzko, meet_rep0, meet_rep1
 from .lwe_dual import dual, matzov as dual_hybrid
 from .lwe_guess import exhaustive_search, mitm, distinguish, guess_composition  # noqa
 from .lwe_primal import primal_usvp, primal_bdd, primal_hybrid
+from .lwe_primal_meet import primal_meet
 from .nd import SparseTernary
 from .gb import arora_gb  # noqa
 from .lwe_parameters import LWEParameters as Parameters  # noqa
