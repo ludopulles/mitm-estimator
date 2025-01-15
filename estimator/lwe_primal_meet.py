@@ -6,22 +6,22 @@ See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
 from functools import partial
-
 from sage.all import oo, cached_function, ceil, exp, log, RR, sqrt
+
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
 from .conf import red_simulator as red_simulator_default
 from .cost import Cost
 from .io import Logging
 from .lwe_comb import AsymptoticMeetREP1, log_comb
+from .lwe_comb import split_weight, sum_log
 from .lwe_parameters import LWEParameters
 from .lwe_primal import primal_usvp, PrimalUSVP
 from .nd import NoiseDistribution, SparseTernary
 from .prob import babai_gaussian, mitm_babai_probability, amplify as prob_amplify
 from .reduction import cost as costf, delta as deltaf
 from .simulator import normalize as simulator_normalize
-from .util import local_minimum
-from .lwe_comb import split_weight, sum_log
+from .util import babai_cost, local_minimum
 
 
 class PrimalMeet:
@@ -29,10 +29,6 @@ class PrimalMeet:
     Estimate cost of solving LWE via a hybrid of primal attack and Meet-LWE [HKLS22].
     """
     _asymptotic = AsymptoticMeetREP1()
-
-    @staticmethod
-    def babai_cost(d):
-        return max(d, 1)**2
 
     @classmethod
     def cost_meet_lwe(
@@ -89,7 +85,7 @@ class PrimalMeet:
         # Analyse the runtime
         log_runtime = sum_log(*logL.values())
         # Multiply the runtime by the number of calls to Babai in dimension `d`.
-        log_runtime += log(PrimalMeet.babai_cost(len(r)))
+        log_runtime += log(babai_cost(len(r)))
 
         # Analyse the success probability
         prob_rep_survives = mitm_babai_probability(r, Xe.stddev)
@@ -148,7 +144,7 @@ class PrimalMeet:
         assert params.Xs.p == params.Xs.m
         h, hw = params.Xs.hamming_weight, 0
         search_space = params.Xs.split_balanced(zeta, hw)[0]
-        num_NP_available = RR(cost_bkz["rop"] / PrimalMeet.babai_cost(d))
+        num_NP_available = RR(cost_bkz["rop"] / babai_cost(d))
         while hw + 2 <= min(h, zeta):
             new_search_space = params.Xs.split_balanced(zeta, hw + 2)[0]
             # Note: exponent 0.25 is very optimistic.

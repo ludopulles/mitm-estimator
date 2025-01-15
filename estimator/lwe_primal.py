@@ -6,22 +6,22 @@ See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
 from functools import partial
-
 from sage.all import oo, ceil, sqrt, log, RR, ZZ, binomial, cached_function
-from .reduction import delta as deltaf
-from .reduction import cost as costf
-from .util import local_minimum
-from .cost import Cost
-from .lwe_parameters import LWEParameters
-from .simulator import normalize as simulator_normalize
-from .prob import drop as prob_drop
-from .prob import amplify as prob_amplify
-from .prob import babai as prob_babai
-from .prob import mitm_babai_probability
-from .io import Logging
+
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
 from .conf import red_simulator as red_simulator_default
+from .cost import Cost
+from .io import Logging
+from .lwe_parameters import LWEParameters
+from .prob import amplify as prob_amplify
+from .prob import babai as prob_babai
+from .prob import drop as prob_drop
+from .prob import mitm_babai_probability
+from .reduction import cost as costf
+from .reduction import delta as deltaf
+from .simulator import normalize as simulator_normalize
+from .util import babai_cost, local_minimum
 
 
 class PrimalUSVP:
@@ -287,10 +287,6 @@ primal_usvp = PrimalUSVP()
 
 class PrimalHybrid:
     @classmethod
-    def babai_cost(cls, d):
-        return Cost(rop=max(d, 1) ** 2)
-
-    @classmethod
     def svp_dimension(cls, r, D):
         """
         Return η for a given lattice shape and distance.
@@ -376,7 +372,7 @@ class PrimalHybrid:
         # 2. Required SVP dimension η
         if babai:
             eta = 2
-            svp_cost = PrimalHybrid.babai_cost(d)
+            svp_cost = Cost(rop=babai_cost(d))
         else:
             # we scaled the lattice so that χ_e is what we want
             eta = PrimalHybrid.svp_dimension(r, params.Xe)
@@ -386,7 +382,7 @@ class PrimalHybrid:
                 return Cost(rop=oo)
             svp_cost = costf(red_cost_model, eta, eta)
             # when η ≪ β, lifting may be a bigger cost
-            svp_cost["rop"] += PrimalHybrid.babai_cost(d - eta)["rop"]
+            svp_cost["rop"] += babai_cost(d - eta)
 
         # 3. Search
         # We need to do one BDD call at least

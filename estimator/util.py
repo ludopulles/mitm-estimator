@@ -10,11 +10,23 @@ from sage.all import ceil, floor, log, oo, pi, RR, cached_function, zeta
 from .io import Logging
 from .lwe_parameters import LWEParameters
 from .sis_parameters import SISParameters
-from .conf import max_n_cache
+from .conf import max_n_cache, exponent_matmul
 
 
 def log2(x):
     return log(x, 2.0)
+
+
+def babai_cost(d):
+    """
+    Return the amortized cost of batching many calls to Babai's nearest plane algorithm.
+    Babai runs `d` calls to Nearest Plane in total time O(d^{omega}), where omega is the matrix-matrix multiplication
+    exponent. Thus, each call takes amortized time O(d^{omega - 1}).
+
+    Note: assuming full-rank lattice.
+    """
+    # return max(d, 1)**2
+    return max(d, 1)**(exponent_matmul - 1.0)
 
 
 @cached_function
