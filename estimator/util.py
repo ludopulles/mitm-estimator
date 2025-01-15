@@ -25,8 +25,8 @@ def babai_cost(d):
 
     Note: assuming full-rank lattice.
     """
-    # return max(d, 1)**2
-    return max(d, 1)**(exponent_matmul - 1.0)
+    return max(d, 1)**2
+    # return max(d, 1)**(exponent_matmul - 1.0)
 
 
 @cached_function
