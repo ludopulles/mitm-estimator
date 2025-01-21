@@ -604,8 +604,8 @@ class MATZOV:
 
         cost = Cost(
             rop=T_sample + T_guess, red=T_sample, guess=T_guess,
-            beta=beta, zeta=k_enum, t=k_fft, beta_=beta_sieve, N=N, m=m,
-            p=p, problem=params,
+            beta=beta, p=p, zeta=k_enum, t=k_fft, beta_=beta_sieve, N=N, m=m,
+            problem=params,
         )
 
         return cost

@@ -128,14 +128,14 @@ class Estimate:
         algorithms["bkw"] = coded_bkw
 
         # Combinatorial Attack
-        if type(params.Xs) is SparseTernary and params.Xe.is_bounded and params.Xs.mean == 0:
-            algorithms['Odlyzko MitM'] = partial(
+        if isinstance(params.Xs, SparseTernary) and params.Xe.is_bounded and params.Xs.mean == 0:
+            algorithms['odlyzko'] = partial(
                 odlyzko, red_cost_model=red_cost_model, red_shape_model=red_shape_model
             )
-            algorithms['REP-0'] = partial(
+            algorithms['may_rep_0'] = partial(
                 meet_rep0, red_cost_model=red_cost_model, red_shape_model=red_shape_model
             )
-            algorithms['REP-1'] = partial(
+            algorithms['may_rep_1'] = partial(
                 meet_rep1, red_cost_model=red_cost_model, red_shape_model=red_shape_model
             )
 
@@ -146,20 +146,20 @@ class Estimate:
         algorithms["bdd"] = partial(
             primal_bdd, red_cost_model=red_cost_model, red_shape_model=red_shape_model
         )
+
         algorithms["bdd_hybrid"] = partial(
-            primal_hybrid,
-            mitm=False,
-            babai=False,
-            red_cost_model=red_cost_model,
-            red_shape_model=red_shape_model,
+            primal_hybrid, mitm=False, babai=False,
+            red_cost_model=red_cost_model, red_shape_model=red_shape_model,
         )
+
         # we ignore the case of mitm=True babai=False for now, due to it being overly-optimistic
         algorithms["bdd_mitm_hybrid"] = partial(
-            primal_hybrid,
-            mitm=True,
-            babai=True,
-            red_cost_model=red_cost_model,
-            red_shape_model=red_shape_model,
+            primal_hybrid, mitm=True, babai=True,
+            red_cost_model=red_cost_model, red_shape_model=red_shape_model,
+        )
+
+        algorithms["primal_meet"] = partial(
+            primal_meet, red_cost_model=red_cost_model, red_shape_model=red_shape_model
         )
 
         # Dual Attacks
