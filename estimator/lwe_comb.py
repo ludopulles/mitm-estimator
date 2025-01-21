@@ -107,10 +107,8 @@ class Odlyzko:
         log_runtime = sum_log(log_S1, log_S2)
         repetitions = prob_amplify(target_probability, exp(log_probability))
 
-        cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-        cost = cost.repeat(repetitions)
-        cost['tag'] = 'Odlyzko'
-        return cost
+        cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime)).repeat(repetitions)
+        return cost + {'tag': 'Odlyzko'}
 
 
 class MeetREP0:
@@ -209,11 +207,8 @@ class MeetREP0:
             log_bet = bet_s1 + bet_s2
             repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
 
-            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-            cost = cost.repeat(repetitions)
-            cost['r'] = r
-            cost['tag'] = 'REP-0 (d=2)'
-            return cost
+            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime)).repeat(repetitions)
+            return cost + {'r': r, 'tag': 'REP-0 (d=2)'}
 
         # Find the optimal `r` here by iteratively incrementing `r`.
         best = {'rop': oo}
@@ -428,12 +423,8 @@ class MeetREP1:
             log_bet = bet_s1 + bet_s2
             repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
 
-            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-            cost = cost.repeat(repetitions)
-            cost['r'] = r
-            cost['epsilon'] = asymptotic_epsilon
-            cost['tag'] = 'REP-1 (d=2)'
-            return cost
+            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime)).repeat(repetitions)
+            return cost + {'r': r, 'epsilon': asymptotic_epsilon, 'tag': 'REP-1 (d=2)'}
 
         # Find the optimal `r` here by iteratively incrementing `r`.
         best = {'rop': oo}
@@ -519,13 +510,11 @@ class MeetREP1:
             log_bet = 2 * log_comb(n // 2, w0 // 2, w0 // 2) - log_comb(n, w0, w0)
             repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
 
-            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-            cost = cost.repeat(repetitions)
-
+            cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime)).repeat(repetitions)
             # cost += {'T_1': exp(log_T1), 'T_2': exp(log_T2), 'T_3': exp(log_T3)}
-            cost += {'r_1': r1, 'r_2': r2, 'epsilon_1': eps1, 'epsilon_2': eps2}
-            cost['tag'] = 'REP-1 (d=3)'
-            return cost
+            return cost + {
+                'r_1': r1, 'r_2': r2, 'epsilon_1': eps1, 'epsilon_2': eps2, 'tag': 'REP-1 (d=3)'
+            }
 
         eps1 = int(round(n * self._asymptotic.optimal_epsilon(3, w0 / 2 / n)))
         eps2 = int(round(n * self._asymptotic.optimal_epsilon(2, (w0 / 2 + eps1) / 2 / n)))

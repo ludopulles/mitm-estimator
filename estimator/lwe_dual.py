@@ -605,7 +605,7 @@ class MATZOV:
         cost = Cost(
             rop=T_sample + T_guess, red=T_sample, guess=T_guess,
             beta=beta, zeta=k_enum, t=k_fft, beta_=beta_sieve, N=N, m=m,
-            prob=p, problem=params,
+            p=p, problem=params,
         )
 
         return cost
@@ -1325,4 +1325,4 @@ class DualHybridv2:
     __name__ = "dual_hybrid_LB"
 
 
-dual_hybrid = DualHybridv2()
+dual_hybrid_v2 = DualHybridv2()
