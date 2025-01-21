@@ -94,14 +94,12 @@ class PrimalMeet:
 
         log_bet = bet_s1 + bet_s2
         prob = prob_rep_survives * exp(log_bet)
-        # print(f"MEET(2^{RR(log(prob_rep_survives, 2)):.1f}, 2^{RR(log_bet / log(2)):.1f}) ", end="")
 
         cost = Cost(
             rop=exp(log_runtime), mem=exp(log_runtime),
-            h_1=w1, h_2=w11, epsilon=asymptotic_epsilon, ell=num_qary_vectors,
+            h_1=w1, h_2=w11, epsilon=asymptotic_epsilon, ell=num_qary_vectors, tag='REP-0 (d=2)'
         )
-        cost['r'] = r
-        cost['tag'] = 'REP-0 (d=2)'
+
         return cost, prob
 
     @staticmethod
@@ -125,6 +123,8 @@ class PrimalMeet:
         .. note :: This is the lowest level function that runs no optimization. It merely reports costs.
 
         """
+        assert isinstance(params.Xs, SparseTernary) and params.Xs.p == params.Xs.m
+
         delta = deltaf(beta)
         d = min(ceil(sqrt((params.n - zeta) * log(params.q) / log(delta))), params.m + (params.n - zeta) - 1)
         xi = PrimalUSVP._xi_factor(params.Xs, params.Xe)
@@ -136,63 +136,57 @@ class PrimalMeet:
             return Cost(rop=oo)
 
         cost_bkz = costf(red_cost_model, beta, d)
+        num_np_available = RR(cost_bkz["rop"] / babai_cost(d))
+        prob_np = RR(babai_gaussian(r, params.Xe.stddev))
 
         # 2. Find the best hamming weight of the guess.
+        best_cost = Cost(rop=oo)
+
         # i.e. iteratively increase the HW until the number of guesses becomes too much.
-        assert type(params.Xs) is SparseTernary
-        assert params.Xs.p == params.Xs.m
         h, hw = params.Xs.hamming_weight, 0
-        search_space = params.Xs.split_balanced(zeta, hw)[0]
-        num_NP_available = RR(cost_bkz["rop"] / babai_cost(d))
         while hw + 2 <= min(h, zeta):
-            new_search_space = params.Xs.split_balanced(zeta, hw + 2)[0]
+            search_space = params.Xs.split_balanced(zeta, hw)[0]
             # Note: exponent 0.25 is very optimistic.
             # Searching all these keys will cost much more time...
-            if RR(new_search_space.support_size()**0.35) >= num_NP_available:
+            if RR(search_space.support_size()**0.25) >= num_np_available:
                 break
-            search_space = new_search_space
+
+            prob_hw = params.Xs.split_probability(zeta, hw)
+            if prob_hw < 2**-20:
+                # Very unlikely in this attack that the secret splits in this way.
+                # The best attack has very small T/p (T = runtime, p = success probability)
+                # The runtime is quite large so it also requires a somewhat large `p`.
+                hw += 2
+                continue
+
+            cost_meet, prob_meet = PrimalMeet.cost_meet_lwe(params.q, r, search_space, params.Xe)
+
+            # 3. Determine success probability and cost.
+            probability = (
+                prob_hw  # prob. secret splits with given weights. Note: p_HW ~ 1/n roughly
+                * prob_np  # prob. correct guess lifts with np. Note: p_NP ~ 1.0 (p_NP > p_adm).
+                * prob_meet  # prob. Meet-LWE gives the correct answer.
+            )
+
+            cost = Cost({
+                "rop": cost_bkz["rop"] + cost_meet["rop"], "red": cost_bkz["rop"],
+                "mem": cost_meet["mem"],
+                "beta": beta, "zeta": zeta, "d": d,
+                "h_": hw, "h_1": cost_meet["h_1"], "h_2": cost_meet["h_2"],
+                "epsilon": cost_meet["epsilon"], "ell": cost_meet["ell"],
+                "|S|": search_space, "prob": probability,
+            })
+
+            # 4. Repeat whole experiment ~1/prob times
+            # assert not (not probability or RR(probability).is_NaN())
+            cost = cost.repeat(prob_amplify(0.99, probability))
+
+            if cost > best_cost:
+                break
+            # print(f"HW={hw} => 2^{RR(log(cost['rop'], 2)):.2f}")
+            best_cost = min(best_cost, cost)
             hw += 2
-
-        if params.Xs.split_probability(zeta, hw) < 2**-20:
-            # Very unlikely in this attack that the secret splits in this way.
-            # The best attack has very small T/p (T = runtime, p = success probability)
-            # In this case, the runtime is quite large, so it also requires a somewhat large `p`.
-            return Cost(rop=oo)
-
-        cost_meet, prob_meet = PrimalMeet.cost_meet_lwe(params.q, r, search_space, params.Xe)
-
-        # Determine success probability:
-        probability = (
-            # p_HW: probability the secret splits its weight as such:
-            # Note: p_HW ~ 1/n roughly
-            params.Xs.split_probability(zeta, hw)
-            # p_NP: probability that the correct guess lifts to the correct (s, e).
-            # Note: p_NP ~ 1.0 (p_NP > p_adm).
-            * RR(babai_gaussian(r, params.Xe.stddev))
-            # p_MEET: probability that Meet-LWE gives the correct answer.
-            * prob_meet
-        )
-
-        if not probability or RR(probability).is_NaN():
-            return Cost(rop=oo)
-
-        cost = Cost({
-            "rop": cost_bkz["rop"] + cost_meet["rop"], "red": cost_bkz["rop"],
-            "mem": cost_meet["mem"],
-            "beta": beta, "zeta": zeta, "d": d,
-            "h_": hw, "h_1": cost_meet["h_1"], "h_2": cost_meet["h_2"],
-            "epsilon": cost_meet["epsilon"], "ell": cost_meet["ell"],
-            "|S|": search_space, "prob": probability,
-        })
-
-        # 4. Repeat whole experiment ~1/prob times
-        cost = cost.repeat(prob_amplify(0.99, probability))
-
-        # print(f"(β={beta}, ζ={zeta}): "
-        #       f"probs {RR(params.Xs.split_probability(zeta, hw)):.8f}, "
-        #       f"{RR(babai_gaussian(r, params.Xe.stddev)):.8f}, "
-        #       f"{RR(prob_meet):.8f} and total runtime 2^{RR(log(cost['rop'], 2)):.1f}")
-        return cost
+        return best_cost
 
     @classmethod
     def cost_zeta(
