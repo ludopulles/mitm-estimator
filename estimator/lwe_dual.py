@@ -164,6 +164,7 @@ class DualHybrid:
 
         d = m_ + params.n - zeta
         _, cost_red, N, sieve_dim = red_cost_model.short_vectors(beta, d, cost["m"])
+        del cost["m"]
         Logging.log("dual", log_level + 2, f"red: {Cost(rop=cost_red)!r}")
 
         # Add the runtime cost of sieving in dimension `sieve_dim` possibly multiple times.
@@ -373,7 +374,7 @@ class DualHybrid:
             >>> from estimator.lwe_dual import dual_hybrid
             >>> params = LWE.Parameters(n=1024, q = 2**32, Xs=ND.Binary, Xe=ND.DiscreteGaussian(3.0))
             >>> LWE.dual(params)
-            rop: ≈2^107.0, mem: ≈2^66.4, m: 970, β: 264, d: 1994, ↻: 1, tag: dual
+            rop: ≈2^107.0, mem: ≈2^66.4, β: 264, m: 970, d: 1994, tag: dual
             >>> dual_hybrid(params)
             rop: ≈2^103.2, mem: ≈2^97.4, m: 937, β: 250, d: 1919, ↻: 1, ζ: 42, tag: dual_hybrid
             >>> dual_hybrid(params, mitm_optimization=True)

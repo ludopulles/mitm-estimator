@@ -356,7 +356,7 @@ class MITM:
             rop: ≈2^215.6, m: ≈2^15.5, k: 512, mem: ≈2^208.6, ↻: 226
 
         """
-        Cost.register_impermanent(k=False)
+        Cost.register_impermanent(m=True, k=False)
 
         params = LWEParameters.normalize(params)
 
