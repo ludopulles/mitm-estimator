@@ -177,15 +177,14 @@ class PrimalMeet:
             return Cost(rop=oo)
 
         ret = Cost(
+            {"|S|": search_space},
             rop=cost_bkz["rop"] + cost_meet["rop"],
             red=cost_bkz["rop"],
             mem=cost_meet["mem"],
             beta=beta, zeta=zeta, d=d, prob=probability,
             h_=hw, h_1=cost_meet["h_1"], h_2=cost_meet["h_2"],
-            epsilon=cost_meet["epsilon"],
-            ell=cost_meet["ell"],
+            epsilon=cost_meet["epsilon"], ell=cost_meet["ell"],
         )
-        ret["|S|"] = search_space
 
         # 4. Repeat whole experiment ~1/prob times
         ret = ret.repeat(prob_amplify(0.99, probability))

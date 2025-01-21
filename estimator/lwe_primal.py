@@ -424,26 +424,17 @@ class PrimalHybrid:
         if eta <= 20 and d >= 0:  # NOTE: η: somewhat arbitrary bound, d: we may guess it all
             probability *= RR(prob_babai(r, sqrt(d) * params.Xe.stddev))
 
-        ret = Cost()
-        ret["rop"] = bkz_cost["rop"] + svp_cost["rop"]
-        ret["red"] = bkz_cost["rop"]
-        ret["svp"] = svp_cost["rop"]
-        ret["beta"] = beta
-        ret["eta"] = eta
-        ret["zeta"] = zeta
-        ret["|S|"] = search_space
-        ret["d"] = d
-        ret["prob"] = probability
+        cost = Cost(
+            {"|S|": search_space}, beta=beta, eta=eta, zeta=zeta, d=d, prob=probability,
+            rop=bkz_cost["rop"] + svp_cost["rop"], red=bkz_cost["rop"], svp=svp_cost["rop"],
+        )
+        if zeta:
+            cost["h_"] = hw
 
-        # 4. Repeat whole experiment ~1/prob times
-        if probability and not RR(probability).is_NaN():
-            ret = ret.repeat(
-                prob_amplify(0.99, probability),
-            )
-        else:
+        if not probability or RR(probability).is_NaN():
             return Cost(rop=oo)
-
-        return ret
+        # 4. Repeat whole experiment ~1/prob times
+        return cost.repeat(prob_amplify(0.99, probability))
 
     @classmethod
     def cost_zeta(

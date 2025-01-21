@@ -602,16 +602,12 @@ class MATZOV:
             * (cls.T_fftf(k_fft, p) + cls.T_tablef(N))
         )
 
-        cost = Cost(rop=T_sample + T_guess, problem=params)
-        cost["red"] = T_sample
-        cost["guess"] = T_guess
-        cost["beta"] = beta
-        cost["prob"] = p
-        cost["zeta"] = k_enum
-        cost["t"] = k_fft
-        cost["beta_"] = beta_sieve
-        cost["N"] = N
-        cost["m"] = m
+        cost = Cost(
+            rop=T_sample + T_guess, red=T_sample, guess=T_guess,  # Runtime
+            prob=p,  # Success probability
+            beta=beta, zeta=k_enum, t=k_fft, beta_=beta_sieve, N=N, m=m,  # Parameters
+            problem=params
+        )
 
         return cost
 
@@ -865,7 +861,12 @@ class CHHS19:
             if only_works:
                 return True
             # This basically boils down to MitM search
-            cost = Cost(rop=params.m * t_search, mem=mem_search, p=RR(p_search), beta=beta, zeta=zeta, h_=h0)
+            cost = Cost(
+                rop=params.m * t_search,  # Runtime
+                mem=mem_search,  # Memory
+                p=RR(p_search),  # Success probability
+                beta=beta, zeta=zeta, h_=h0  # Parameters
+            )
             rep = prob_amplify(success_probability, cost["prob"])
             return cost.repeat(times=rep) if rep > 1 else cost
 

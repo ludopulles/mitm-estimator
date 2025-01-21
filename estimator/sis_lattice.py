@@ -158,25 +158,17 @@ class SISLattice:
         probability = 2 ** min(
             0, log_trial_prob + RR(log(N, 2))
         )  # expected number of solutions (max 1)
-        ret = Cost()
-        ret["rop"] = cost_red
-        ret["red"] = bkz_cost["rop"]
-        ret["sieve"] = max(cost_red - bkz_cost["rop"], 1e-100)  # Ensuring non-zero cost here
-        ret["beta"] = beta
-        ret["eta"] = sieve_dim
-        ret["zeta"] = zeta
-        ret["d"] = d_
-        ret["prob"] = probability
 
-        # 4. Repeat whole experiment ~1/prob times
-        if probability and not RR(probability).is_NaN():
-            ret = ret.repeat(
-                prob_amplify(success_probability, probability),
-            )
-        else:
+        cost = Cost(
+            rop=cost_red, red=bkz_cost["rop"],
+            sieve=max(cost_red - bkz_cost["rop"], 1e-100),  # Ensuring non-zero cost here
+            beta=beta, eta=sieve_dim, zeta=zeta, d=d_, prob=probability,
+        )
+
+        if not probability or RR(probability).is_NaN():
             return Cost(rop=oo)
-
-        return ret
+        # 4. Repeat whole experiment ~1/prob times
+        return cost.repeat(prob_amplify(0.99, probability))
 
     @classmethod
     def cost_zeta(
