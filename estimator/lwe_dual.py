@@ -700,7 +700,7 @@ def dual(
     """
     Cost.register_impermanent(m=False)
 
-    ret = DH.optimize_blocksize(
+    cost = DH.optimize_blocksize(
         solver=distinguish,
         params=params,
         zeta=0,
@@ -709,11 +709,11 @@ def dual(
         red_cost_model=red_cost_model,
         log_level=1,
     )
-    del ret["zeta"]
-    if "h_" in ret:
-        del ret["h_"]
-    ret["tag"] = "dual"
-    return ret
+    del cost["zeta"]
+    if "h_" in cost:
+        del cost["h_"]
+    cost["tag"] = "dual"
+    return cost
 
 
 def dual_hybrid(
@@ -758,7 +758,7 @@ def dual_hybrid(
     else:
         solver = exhaustive_search
 
-    ret = DH(
+    cost = DH(
         solver=solver,
         params=params,
         success_probability=success_probability,
@@ -767,10 +767,10 @@ def dual_hybrid(
         fft=fft,
     )
     if mitm_optimization:
-        ret["tag"] = "dual_mitm_hybrid"
+        cost["tag"] = "dual_mitm_hybrid"
     else:
-        ret["tag"] = "dual_hybrid"
-    return ret
+        cost["tag"] = "dual_hybrid"
+    return cost
 
 
 ####################################################################################################
@@ -1182,10 +1182,10 @@ class DualHybridv2:
             # Thus, the attack will not work in expectation.
             return Cost(rop=oo)
 
-        # ret = bkz_cost + sieve_cost
-        ret = bkz_cost
-        ret["rop"] += sieve_cost["rop"]
-        ret["mem"] = RR(num_vectors * beta_sieve)
+        # cost = bkz_cost + sieve_cost
+        cost = bkz_cost
+        cost["rop"] += sieve_cost["rop"]
+        cost["mem"] = RR(num_vectors * beta_sieve)
 
         # Time to compute the score for each targets.
         # Here, make simplifying assumption that we can run a FFT on all the targets without any
@@ -1193,10 +1193,10 @@ class DualHybridv2:
         # application of the FFT. This optimism includes the "modulus switching" technique
         # [MATZOV22], and pretends as if this technique doesn't increase the noise, which it does.
 
-        ret["rop"] += RR(num_targets * (num_vectors + 2**k_fft * k_fft))
+        cost["rop"] += RR(num_targets * (num_vectors + 2**k_fft * k_fft))
 
         # Success probability is definitely optimistic here!
-        return ret.combine(Cost(prob=1.0))
+        return cost.combine(Cost(prob=1.0))
 
     @classmethod
     def cost_zeta_(

@@ -180,9 +180,9 @@ class Cost(UserDict):
             impermanents.update(select)
 
         try:
-            ret = {k: times * v if impermanents[k] else v for k, v in self.items()}
-            ret["repetitions"] = times * ret.get("repetitions", 1)
-            return Cost(**ret)
+            new_cost = {k: times * v if impermanents[k] else v for k, v in self.items()}
+            new_cost["repetitions"] = times * new_cost.get("repetitions", 1)
+            return Cost(**new_cost)
         except KeyError as error:
             raise NotImplementedError(
                 f"You found a bug, this function does not know about about a key but should: {error}"

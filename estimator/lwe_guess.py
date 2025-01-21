@@ -201,8 +201,8 @@ class ExhaustiveSearch:
         # from [ia.cr/2020/515]
         cost = 2 * size * m_required
 
-        ret = Cost(rop=cost, mem=cost / 2, m=m_required)
-        return ret.sanity_check()
+        cost = Cost(rop=cost, mem=cost / 2, m=m_required)
+        return cost.sanity_check()
 
     __name__ = "exhaustive_search"
 
@@ -265,11 +265,11 @@ class MITM:
             )
 
         # since m = logT + loglogT and rop = T*m, we have rop=2^m
-        ret = Cost(rop=RR(2**m_required), mem=2**logT * m_required, m=m_required, k=ZZ(k))
+        cost = Cost(rop=RR(2**m_required), mem=2**logT * m_required, m=m_required, k=ZZ(k))
         repeat = prob_amplify(
             success_probability, sd_p**n * nd_p**m_required * success_probability_
         )
-        return ret.repeat(times=repeat)
+        return cost.repeat(times=repeat)
 
     def cost(
         self,
@@ -320,11 +320,11 @@ class MITM:
         # building the table costs 2*T*m using the generalization [ia.cr/2021/152] of
         # the recursive algorithm from [ia.cr/2020/515]
         cost_table = size_tab * 2 * m
+        mem_usage = size_tab * (k + m) + size_sea * (n - k + m)
 
-        ret = Cost(rop=(cost_table + cost_search), m=m, k=k)
-        ret["mem"] = size_tab * (k + m) + size_sea * (n - k + m)
+        cost = Cost(rop=(cost_table + cost_search), m=m, k=k, mem=mem_usage)
         repeat = prob_amplify(success_probability, sd_p**n * nd_p**m * success_probability_)
-        return ret.repeat(times=repeat)
+        return cost.repeat(times=repeat)
 
     def __call__(self, params: LWEParameters, success_probability=0.99, optimization=mitm_opt):
         """
@@ -375,11 +375,11 @@ class MITM:
                 for k in it:
                     cost = self.cost(k=k, params=params, success_probability=success_probability)
                     it.update(cost)
-                ret = it.y
+                cost = it.y
                 # if the noise is large, the curve might not be convex, so the above minimum
                 # is not correct. Interestingly, in these cases, it seems that k=1 might be smallest
-                ret1 = self.cost(k=1, params=params, success_probability=success_probability)
-                return min(ret, ret1)
+                cost1 = self.cost(k=1, params=params, success_probability=success_probability)
+                return min(cost, cost1)
         else:
             raise ValueError("Unknown optimization method for MITM.")
 

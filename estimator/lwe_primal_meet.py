@@ -176,7 +176,7 @@ class PrimalMeet:
         if not probability or RR(probability).is_NaN():
             return Cost(rop=oo)
 
-        ret = Cost(
+        cost = Cost(
             {"|S|": search_space},
             rop=cost_bkz["rop"] + cost_meet["rop"],
             red=cost_bkz["rop"],
@@ -187,13 +187,13 @@ class PrimalMeet:
         )
 
         # 4. Repeat whole experiment ~1/prob times
-        ret = ret.repeat(prob_amplify(0.99, probability))
+        cost = cost.repeat(prob_amplify(0.99, probability))
 
         # print(f"(β={beta}, ζ={zeta}): "
         #       f"probs {RR(params.Xs.split_probability(zeta, hw)):.8f}, "
         #       f"{RR(babai_gaussian(r, params.Xe.stddev)):.8f}, "
-        #       f"{RR(prob_meet):.8f} and total runtime 2^{RR(log(ret['rop'], 2)):.1f}")
-        return ret
+        #       f"{RR(prob_meet):.8f} and total runtime 2^{RR(log(cost['rop'], 2)):.1f}")
+        return cost
 
     @classmethod
     def cost_zeta(
