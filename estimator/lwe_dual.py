@@ -159,7 +159,7 @@ class DualHybrid:
             cost = solver(params_slv, success_probability)
         cost["beta"] = beta
 
-        if cost["rop"] == oo or cost["m"] == oo:
+        if oo in (cost['rop'], cost['m']):
             return cost
 
         d = m_ + params.n - zeta
@@ -173,22 +173,19 @@ class DualHybrid:
         # (mod q) to represent them. Note that short dual vectors may actually be described by less
         # bits because its coefficients are generally small, so this is really an upper bound here.
         cost["mem"] += sieve_dim * N
-        cost["m"] = m_
 
         if d < params.n - zeta:
             raise RuntimeError(f"{d} < {params.n - zeta}, {params.n}, {zeta}, {m_}")
-        cost["d"] = d
 
         Logging.log("dual", log_level, f"{repr(cost)}")
 
-        rep = 1
         if params.Xs.is_sparse:
             h = params.Xs.hamming_weight
             probability = RR(prob_drop(params.n, h, zeta, h1))
-            rep = prob_amplify(success_probability, probability)
-        # don't need more samples to re-run attack, since we may
-        # just guess different components of the secret
-        return cost.repeat(times=rep, select={"m": False})
+            # don't need more samples to re-run attack, since we may
+            # just guess different components of the secret
+            cost = cost.repeat(prob_amplify(success_probability, probability))
+        return cost + {'m': m_, 'd': d}
 
     @staticmethod
     def fft_solver(params, success_probability, t=0):
@@ -211,6 +208,7 @@ class DualHybrid:
         .. note :: The parameter t only makes sense in the context of the dual attack,
             which is why this function is here and not in the lwe_guess module.
         """
+        Cost.register_impermanent(t=False)
 
         # there are two stages: enumeration and distinguishing, so we split up the success_probability
         probability = sqrt(success_probability)
@@ -417,9 +415,6 @@ class DualHybrid:
             rop: ≈2^149.8, mem: ≈2^92.1, m: 510, t: 76, β: 399, d: 1000, ↻: 1, ζ: 22, tag: dual_hybrid
 
         """
-
-        Cost.register_impermanent(m=False, t=False)
-
         Logging.log("dual", log_level, f"costing LWE instance: {repr(params)}")
 
         params = params.normalize()
@@ -697,8 +692,6 @@ def dual(
     - ``d``: Lattice dimension.
 
     """
-    Cost.register_impermanent(m=False)
-
     cost = DH.optimize_blocksize(
         solver=distinguish,
         params=params,
@@ -775,7 +768,7 @@ def dual_hybrid(
 ####################################################################################################
 class CHHS19:
     """
-    Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+    Estimate cost of solving LWE using the dual attack from [IEEE:CHHS19]_.
     """
 
     MEMORY_BOUND = 2**80
@@ -830,8 +823,8 @@ class CHHS19:
         only_works=False,
     ):
         """
-        Cost of the [EPRINT:CHHS19]_ attack.
-        Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+        Cost of the [IEEE:CHHS19]_ attack.
+        Estimate cost of solving LWE using the dual attack from [IEEE:CHHS19]_.
         :param params: LWE parameters
         :param beta: Block size used to produce short dual vectors
         :param zeta: Guessing dimension ζ ≥ 0.
@@ -844,8 +837,6 @@ class CHHS19:
            costs.
 
         """
-        Cost.register_impermanent(m=False, m_=False)
-
         n, h = params.n, params.Xs.hamming_weight
         delta = deltaf(beta)
 
@@ -864,8 +855,7 @@ class CHHS19:
                 rop=params.m * t_search, mem=mem_search,
                 beta=beta, zeta=zeta, h_=h0, prob=RR(p_search),
             )
-            rep = prob_amplify(success_probability, cost["prob"])
-            return cost.repeat(times=rep) if rep > 1 else cost
+            return cost.repeat(prob_amplify(success_probability, cost["prob"]))
 
         # xi is the scaling factor for the secret such that `xi s_2` and `e` have the same standard deviation,
         # where s_1 is the non-guessed secret, assumed to be of weight `h - h0`, and dimension `n - zeta`.
@@ -912,16 +902,13 @@ class CHHS19:
 
         cost = Cost(
             rop=t_BKZ + m * t_search, red=t_BKZ, mem=mem_search,
-            beta=beta, zeta=zeta, h_=h0, m=m, d=d, m_=tau,
+            beta=beta, zeta=zeta, h_=h0, d=d,
             prob=RR(p_search * p_error_bounded),
         )
 
         # print(f"beta={beta}, zeta={zeta}, h0={h0}: T_BKZ = {float(t_BKZ):.2e}, T_search = {float(time_search):.2e}")
-        rep = prob_amplify(success_probability, cost["prob"])
-        # return (t_BKZ * rep, time_search * rep)
-        if rep > 1:
-            cost = cost.repeat(times=rep)
-        return cost
+        cost = cost.repeat(prob_amplify(success_probability, cost["prob"]))
+        return cost + {'m': m, 'm_': tau}
 
     def minimal_zeta_needed(
         self,
@@ -968,8 +955,8 @@ class CHHS19:
         log_level=1,
     ):
         """
-        Cost of the [EPRINT:CHHS19]_ attack for a particular beta.
-        Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+        Cost of the [IEEE:CHHS19]_ attack for a particular beta.
+        Estimate cost of solving LWE using the dual attack from [IEEE:CHHS19]_.
         :param params: LWE parameters
         :param beta: Block size used to produce short dual vectors
         :param h0: Number of non-zero components expected in the guessed secret.
@@ -1030,9 +1017,9 @@ class CHHS19:
         log_level=1,
     ):
         """
-        Cost of the [EPRINT:CHHS19]_ attack for a particular h0.
+        Cost of the [IEEE:CHHS19]_ attack for a particular h0.
 
-        Estimate cost of solving LWE using the dual attack from [EPRINT:CHHS19]_.
+        Estimate cost of solving LWE using the dual attack from [IEEE:CHHS19]_.
         :param params: LWE parameters
         :param h0: Number of non-zero components expected in the guessed secret.
         :param success_probability: The success probability to target
@@ -1246,8 +1233,7 @@ class DualHybridv2:
                     search_space = sea.support_size()
                     reduced_params = params.updated(n=params.n - zeta, Xs=red)
                 cost_ = cls.cost_zeta_(
-                    reduced_params, search_space, simulator, red_cost_model, log_level,
-                    **kwds
+                    reduced_params, search_space, simulator, red_cost_model, log_level, **kwds
                 )
 
                 if cost_["rop"] == oo:

@@ -85,7 +85,6 @@ class AroraGB:
         :param omega: linear algebra constant.
 
         """
-        Cost.register_impermanent(t=False, m=True)
 
         d = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
         dn = cls.equations_for_secret(params)
@@ -98,6 +97,7 @@ class AroraGB:
             cost["m"] = binomial(params.n + cost["dreg"], cost["dreg"])
         else:
             cost["m"] = m
+        cost.register_impermanent(t=False, m=True)
         return cost
 
     @classmethod
@@ -110,7 +110,6 @@ class AroraGB:
         :param omega: linear algebra constant.
 
         """
-        Cost.register_impermanent(t=False, m=True)
 
         dn = cls.equations_for_secret(params)
 
@@ -142,6 +141,7 @@ class AroraGB:
 
             current["t"] = t
             current["m"] = m_can
+            current.register_impermanent(t=False, m=True)
             current = current.reorder("rop", "m", "dreg", "t")
 
             Logging.log("repeat", log_level + 1, repr(current))

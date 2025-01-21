@@ -100,9 +100,6 @@ class CodedBKW:
         :param ntest: Number of coordinates to hypothesis test.
 
         """
-        Cost.register_impermanent(
-            {"#cod": False, "#top": False, "#test": False}, t1=False, t2=False, m=True)
-
         # Our cost is mainly determined by q^b, on the other hand there are expressions in q^(ℓ+1)
         # below, hence, we set ℓ = b - 1. This allows to achieve the performance reported in
         # [C:GuoJohSta15].

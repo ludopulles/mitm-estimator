@@ -33,7 +33,7 @@ NIST PQC Round 3 Finalists
 
     >>> from estimator import *
     >>> schemes.LightSaber
-    LWEParameters(n=512, q=8192, Xs=D(σ=1.58), Xe=D(σ=2.29, μ=0.50), m=512, tag='LightSaber')
+    LWEParameters(n=512, q=8192, Xs=D(σ=1.58), Xe=D(σ=2.29, μ=-0.50), m=512, tag='LightSaber')
     >>> LWE.primal_bdd(schemes.LightSaber)
     rop: ≈2^140.1, red: ≈2^139.5, svp: ≈2^138.5, β: 390, η: 420, d: 1025, tag: bdd
 
@@ -41,7 +41,7 @@ NIST PQC Round 3 Finalists
 
     >>> from estimator import *
     >>> schemes.Saber
-    LWEParameters(n=768, q=8192, Xs=D(σ=1.41), Xe=D(σ=2.29, μ=0.50), m=768, tag='Saber')
+    LWEParameters(n=768, q=8192, Xs=D(σ=1.41), Xe=D(σ=2.29, μ=-0.50), m=768, tag='Saber')
     >>> LWE.primal_bdd(schemes.Saber)
     rop: ≈2^208.2, red: ≈2^207.0, svp: ≈2^207.3, β: 631, η: 667, d: 1478, tag: bdd
 
@@ -49,7 +49,7 @@ NIST PQC Round 3 Finalists
 
     >>> from estimator import *
     >>> schemes.FireSaber
-    LWEParameters(n=1024, q=8192, Xs=D(σ=1.22), Xe=D(σ=2.29, μ=0.50), m=1024, tag='FireSaber')
+    LWEParameters(n=1024, q=8192, Xs=D(σ=1.22), Xe=D(σ=2.29, μ=-0.50), m=1024, tag='FireSaber')
     >>> LWE.primal_bdd(schemes.FireSaber)
     rop: ≈2^275.8, red: ≈2^274.9, svp: ≈2^274.7, β: 873, η: 908, d: 1894, tag: bdd
 

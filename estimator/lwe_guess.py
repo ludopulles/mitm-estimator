@@ -109,12 +109,9 @@ class guess_composition:
                 single_cost = f(params.updated(n=params.n - zeta), log_level=log_level + 1, **kwds)
                 if single_cost["rop"] == oo:
                     return Cost(rop=oo)
-                repeat, gamma, search_space, probability = cls.gammaf(params.n, h, zeta, base)
+                repeat, _, search_space, probability = cls.gammaf(params.n, h, zeta, base)
                 cost = single_cost.repeat(repeat)
-                cost["zeta"] = zeta
-                cost["|S|"] = search_space
-                cost["prop"] = probability
-                it.update(cost)
+                it.update(cost + {'zeta': zeta, '|S|': search_space, 'prob': probability})
             return it.y
 
     def __call__(self, params, log_level=5, **kwds):
@@ -128,12 +125,12 @@ class guess_composition:
             >>> from estimator import *
             >>> from estimator.lwe_guess import guess_composition
             >>> guess_composition(LWE.primal_usvp)(schemes.Kyber512.updated(Xs=ND.SparseTernary(16)))
-            rop: ≈2^102.2, red: ≈2^102.2, δ: 1.008011, β: 132, d: 461, tag: usvp, ↻: ≈2^34.9, ζ: 252, |S|: 1, ...
+            rop: ≈2^102.2, red: ≈2^102.2, δ: 1.008011, β: 132, d: 461, tag: usvp, ↻: ≈2^34.9, ζ:...
 
         Compare::
 
             >>> LWE.primal_hybrid(schemes.Kyber512.updated(Xs=ND.SparseTernary(16)))
-            rop: ≈2^85.8, red: ≈2^84.8, svp: ≈2^84.8, β: 105, η: 2, ζ: 366, |S|: ≈2^85.1, d: 315, prob: ≈2^-23.4, ↻:...
+            rop: ≈2^85.8, red: ≈2^84.8, svp: ≈2^84.8, β: 105, η: 2, ζ: 366, |S|: ≈2^85.1, d: 315...
 
         """
         params = LWEParameters.normalize(params)
@@ -359,7 +356,7 @@ class MITM:
             rop: ≈2^215.6, m: ≈2^15.5, k: 512, mem: ≈2^208.6, ↻: 226
 
         """
-        Cost.register_impermanent(m=True, k=False)
+        Cost.register_impermanent(k=False)
 
         params = LWEParameters.normalize(params)
 
