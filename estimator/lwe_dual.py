@@ -320,7 +320,7 @@ class DualHybrid:
 
         cost["zeta"] = zeta
         if params.Xs.is_sparse:
-            cost["h1"] = h1
+            cost["h_"] = h1
         return cost
 
     def __call__(
@@ -387,9 +387,9 @@ class DualHybrid:
             >>> LWE.dual(params)
             rop: ≈2^103.4, mem: ≈2^63.9, m: 904, β: 251, d: 1928, ↻: 1, tag: dual
             >>> dual_hybrid(params)
-            rop: ≈2^91.6, mem: ≈2^77.2, m: 711, β: 168, d: 1456, ↻: ≈2^11.2, ζ: 279, h1: 8, tag: dual_hybrid
+            rop: ≈2^91.6, mem: ≈2^77.2, m: 711, β: 168, d: 1456, ↻: ≈2^11.2, ζ: 279, h': 8, tag: dual_hybrid
             >>> dual_hybrid(params, mitm_optimization=True)
-            rop: ≈2^98.7, mem: ≈2^78.6, m: 737, k: 288, ↻: ≈2^19.6, β: 184, d: 1284, ζ: 477, h1: 17, tag: dual_mitm_...
+            rop: ≈2^98.7, mem: ≈2^78.6, m: 737, k: 288, ↻: ≈2^19.6, β: 184, d: 1284, ζ: 477, h': 17, tag: dual_mitm_...
 
             >>> params = params.updated(Xs=ND.CenteredBinomial(8))
             >>> LWE.dual(params)
@@ -408,7 +408,7 @@ class DualHybrid:
             rop: ≈2^160.7, mem: ≈2^156.8, m: 1473, k: 25, ↻: 1, β: 456, d: 2472, ζ: 25, tag: dual_mitm_hybrid
 
             >>> dual_hybrid(schemes.NTRUHPS2048509Enc)
-            rop: ≈2^136.2, mem: ≈2^127.8, m: 434, β: 356, d: 902, ↻: 35, ζ: 40, h1: 19, tag: dual_hybrid
+            rop: ≈2^136.2, mem: ≈2^127.8, m: 434, β: 356, d: 902, ↻: 35, ζ: 40, h': 19, tag: dual_hybrid
 
             >>> LWE.dual(schemes.CHHS_4096_67)
             rop: ≈2^206.9, mem: ≈2^137.5, m: ≈2^11.8, β: 616, d: 7779, ↻: 1, tag: dual
@@ -418,25 +418,13 @@ class DualHybrid:
 
         """
 
-        Cost.register_impermanent(
-            rop=True,
-            mem=False,
-            red=True,
-            beta=False,
-            delta=False,
-            m=False,
-            d=False,
-            zeta=False,
-            t=False,
-        )
+        Cost.register_impermanent(m=False, t=False)
 
         Logging.log("dual", log_level, f"costing LWE instance: {repr(params)}")
 
         params = params.normalize()
 
         if params.Xs.is_sparse:
-            Cost.register_impermanent(h1=False)
-
             def _optimize_blocksize(
                 solver,
                 params: LWEParameters,
@@ -581,6 +569,7 @@ class MATZOV:
         Theorem 7.6
 
         """
+        Cost.register_impermanent(beta_=False, t=False, N=False)
 
         if m is None:
             m = params.n
@@ -617,14 +606,13 @@ class MATZOV:
         cost["red"] = T_sample
         cost["guess"] = T_guess
         cost["beta"] = beta
-        cost["p"] = p
+        cost["prob"] = p
         cost["zeta"] = k_enum
         cost["t"] = k_fft
         cost["beta_"] = beta_sieve
         cost["N"] = N
         cost["m"] = m
 
-        cost.register_impermanent({"β'": False, "ζ": False, "t": False}, rop=True, p=False, N=False)
         return cost
 
     def __call__(
@@ -714,15 +702,7 @@ def dual(
     - ``d``: Lattice dimension.
 
     """
-    Cost.register_impermanent(
-        rop=True,
-        mem=False,
-        red=True,
-        beta=False,
-        delta=False,
-        m=False,
-        d=False,
-    )
+    Cost.register_impermanent(m=False)
 
     ret = DH.optimize_blocksize(
         solver=distinguish,
@@ -734,8 +714,8 @@ def dual(
         log_level=1,
     )
     del ret["zeta"]
-    if "h1" in ret:
-        del ret["h1"]
+    if "h_" in ret:
+        del ret["h_"]
     ret["tag"] = "dual"
     return ret
 
@@ -869,13 +849,10 @@ class CHHS19:
            costs.
 
         """
+        Cost.register_impermanent(m=False, m_=False)
+
         n, h = params.n, params.Xs.hamming_weight
         delta = deltaf(beta)
-
-        Cost.register_impermanent(
-            rop=True, red=True,
-            mem=False, p=False, beta=False, zeta=False, h_=False, m=False, d=False, m_=False
-        )
 
         if h0 is None:
             # Pick h0 most balanced possible.
@@ -889,7 +866,7 @@ class CHHS19:
                 return True
             # This basically boils down to MitM search
             cost = Cost(rop=params.m * t_search, mem=mem_search, p=RR(p_search), beta=beta, zeta=zeta, h_=h0)
-            rep = prob_amplify(success_probability, cost["p"])
+            rep = prob_amplify(success_probability, cost["prob"])
             return cost.repeat(times=rep) if rep > 1 else cost
 
         # xi is the scaling factor for the secret such that `xi s_2` and `e` have the same standard deviation,
@@ -938,12 +915,12 @@ class CHHS19:
         cost = Cost(
             rop=t_BKZ + m * t_search, red=t_BKZ,  # Runtime
             mem=mem_search,  # Memory
-            p=RR(p_search * p_error_bounded),  # Success probability
+            prob=RR(p_search * p_error_bounded),  # Success probability
             beta=beta, zeta=zeta, h_=h0, m=m, d=d, m_=tau,  # Parameters
         )
 
         # print(f"beta={beta}, zeta={zeta}, h0={h0}: T_BKZ = {float(t_BKZ):.2e}, T_search = {float(time_search):.2e}")
-        rep = prob_amplify(success_probability, cost["p"])
+        rep = prob_amplify(success_probability, cost["prob"])
         # return (t_BKZ * rep, time_search * rep)
         if rep > 1:
             cost = cost.repeat(times=rep)
@@ -1279,7 +1256,7 @@ class DualHybridv2:
                 if cost_["rop"] == oo:
                     return cost_
                 cost_["prob"] *= prob
-                cost_["h"] = h
+                cost_["h_"] = h
                 return cost_.repeat(prob_amplify(0.99, prob))
 
             min_h = max(0, params.Xs.hamming_weight - (params.n - zeta))
@@ -1324,12 +1301,6 @@ class DualHybridv2:
         - ``repeat``: How often to repeat the attack.
         - ``d``: Lattice dimension.
         """
-        Cost.register_impermanent(
-            {"|S|": False},
-            rop=True, red=True,
-            mem=False, beta=False, prob=False, h=False
-        )
-
         params = LWEParameters.normalize(params)
         simulator = simulator_normalize(red_shape_model)
 

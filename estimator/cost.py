@@ -16,10 +16,26 @@ class Cost(UserDict):
     # scaled.
 
     impermanents = {
-        "rop": True,
-        "repetitions": False,
-        "tag": False,
-        "problem": False,
+        # Timing related:
+        "rop": True,  # number of ring operations
+        "red": True,  # rop's spent on lattice reduction
+        "svp": True,  # rop's spent to solve SVP
+
+        # General properties:
+        "prob": False,  # success probability
+        "repetitions": False,  # number of repetitions required to boost success probability
+        "tag": False,  # name of the attack
+        "problem": False,  # targeted LWE parameters
+        "mem": False,  # memory usage
+
+        # Specific attack parameters:
+        "zeta": False,  # guessing dimension
+        "d": False,  # projected dimension, after ignoring initial part of basis
+        "beta": False,  # Block size for BKZ
+        "delta": False,  # n-th root Hermite factor, a lattice reduction quality measure
+        "|S|": False,  # Search space (size)
+        "eta": False,  # dimension of Babai nearest plane (see lwe_primal.py)
+        "h_": False,  # guessed hamming weight of guessing part of a sparse secret
     }
 
     @staticmethod

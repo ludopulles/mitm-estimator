@@ -104,6 +104,8 @@ class SISLattice:
             it merely reports costs.
 
         """
+        Cost.register_impermanent(sieve=True)
+
         if params.length_bound >= params.q:
             raise ValueError("SIS trivially easy. Please set norm bound < q.")
 
@@ -138,7 +140,7 @@ class SISLattice:
                 idx_start = 0
 
             if abs(r[-1] - 1) < 1e-8:  # 1-vectors exist
-                # Find first 1 length graham-schmidt vector in r (Zone III)
+                # Find first 1 length Gram--Schmidt vector in r (Zone III)
                 idx_end = next((i - 1 for i, r_ in enumerate(r) if sqrt(r_) <= 1 + 1e-8), d_ - 1)
 
             else:
@@ -166,14 +168,6 @@ class SISLattice:
         ret["d"] = d_
         ret["prob"] = probability
 
-        ret.register_impermanent(
-            rop=True,
-            red=True,
-            sieve=True,
-            eta=False,
-            zeta=False,
-            prob=False,
-        )
         # 4. Repeat whole experiment ~1/prob times
         if probability and not RR(probability).is_NaN():
             ret = ret.repeat(

@@ -435,16 +435,6 @@ class PrimalHybrid:
         ret["d"] = d
         ret["prob"] = probability
 
-        ret.register_impermanent(
-            {"|S|": False},
-            rop=True,
-            red=True,
-            svp=True,
-            eta=False,
-            zeta=False,
-            prob=False,
-        )
-
         # 4. Repeat whole experiment ~1/prob times
         if probability and not RR(probability).is_NaN():
             ret = ret.repeat(

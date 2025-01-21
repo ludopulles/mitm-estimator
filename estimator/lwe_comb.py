@@ -108,7 +108,6 @@ class Odlyzko:
         repetitions = prob_amplify(target_probability, exp(log_probability))
 
         cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-        cost.register_impermanent(rop=True, mem=False)
         cost = cost.repeat(repetitions)
         cost['tag'] = 'Odlyzko'
         return cost
@@ -211,7 +210,6 @@ class MeetREP0:
             repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
 
             cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-            cost.register_impermanent(rop=True, mem=False)
             cost = cost.repeat(repetitions)
             cost['r'] = r
             cost['tag'] = 'REP-0 (d=2)'
@@ -431,7 +429,6 @@ class MeetREP1:
             repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
 
             cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-            cost.register_impermanent(rop=True, mem=False)
             cost = cost.repeat(repetitions)
             cost['r'] = r
             cost['epsilon'] = asymptotic_epsilon
@@ -523,7 +520,6 @@ class MeetREP1:
             repetitions = prob_amplify(target_probability, prob_rep_survives * exp(log_bet))
 
             cost = Cost(rop=exp(log_runtime), mem=exp(log_runtime))
-            cost.register_impermanent(rop=True, mem=False)
             cost = cost.repeat(repetitions)
 
             # cost += {'T_1': exp(log_T1), 'T_2': exp(log_T2), 'T_3': exp(log_T3)}

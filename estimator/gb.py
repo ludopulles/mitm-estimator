@@ -41,6 +41,8 @@ def gb_cost(n, D, omega=2, prec=None):
         rop: ≈2^144.6, dreg: 17, mem: ≈2^144.6
 
     """
+    Cost.register_impermanent(dreg=False)
+
     prec = 2 * n if prec is None else prec
 
     R = PowerSeriesRing(QQ, "z", prec)
@@ -52,7 +54,6 @@ def gb_cost(n, D, omega=2, prec=None):
     s = prod(((1 - z**d)**m for d, m in D), s) / (1 - z) ** n
 
     retval = Cost(rop=oo, dreg=oo)
-    retval.register_impermanent({"rop": True, "dreg": False, "mem": False})
 
     for dreg in range(prec):
         if s[dreg] < 0:
@@ -84,6 +85,8 @@ class AroraGB:
         :param omega: linear algebra constant.
 
         """
+        Cost.register_impermanent(t=False, m=True)
+
         d = params.Xe.bounds[1] - params.Xe.bounds[0] + 1
         dn = cls.equations_for_secret(params)
 
@@ -95,7 +98,6 @@ class AroraGB:
             cost["m"] = binomial(params.n + cost["dreg"], cost["dreg"])
         else:
             cost["m"] = m
-        cost.register_impermanent(t=False, m=True)
         return cost
 
     @classmethod
@@ -108,6 +110,8 @@ class AroraGB:
         :param omega: linear algebra constant.
 
         """
+        Cost.register_impermanent(t=False, m=True)
+
         dn = cls.equations_for_secret(params)
 
         best, stuck = None, 0
@@ -138,7 +142,6 @@ class AroraGB:
 
             current["t"] = t
             current["m"] = m_can
-            current.register_impermanent(t=False, m=True)
             current = current.reorder("rop", "m", "dreg", "t")
 
             Logging.log("repeat", log_level + 1, repr(current))
@@ -223,10 +226,10 @@ class AroraGB:
             errors.  In L.  Aceto, M.  Henzinger, & J.  Sgall, ICALP 2011, Part I (pp.  403–415).:
             Springer, Heidelberg.
         """
-        params = params.normalize()
+        Cost.register_impermanent(dreg=False)
 
+        params = params.normalize()
         best = Cost(rop=oo, dreg=oo)
-        best.register_impermanent({"rop": True, "dreg": False, "mem": False})
 
         if params.Xe.is_bounded:
             cost = self.cost_bounded(

@@ -30,9 +30,8 @@ class PrimalMeet:
     """
     _asymptotic = AsymptoticMeetREP1()
 
-    @classmethod
+    @staticmethod
     def cost_meet_lwe(
-        self,
         q: int,
         r,
         search_space: SparseTernary,
@@ -46,7 +45,7 @@ class PrimalMeet:
         w0 = w // 2
         w1, w2 = split_weight(w0)
 
-        asymptotic_epsilon = int(round(n * self._asymptotic.optimal_epsilon(2, w0 / n)))
+        asymptotic_epsilon = int(round(n * PrimalMeet._asymptotic.optimal_epsilon(2, w0 / n)))
         w1 += asymptotic_epsilon
         w2 += asymptotic_epsilon
 
@@ -105,9 +104,9 @@ class PrimalMeet:
         cost['tag'] = 'REP-0 (d=2)'
         return cost, prob
 
+    @staticmethod
     @cached_function
     def cost(
-        self,
         params: LWEParameters,
         beta: int,
         zeta: int,
@@ -160,7 +159,7 @@ class PrimalMeet:
             # In this case, the runtime is quite large, so it also requires a somewhat large `p`.
             return Cost(rop=oo)
 
-        cost_meet, prob_meet = self.cost_meet_lwe(params.q, r, search_space, params.Xe)
+        cost_meet, prob_meet = PrimalMeet.cost_meet_lwe(params.q, r, search_space, params.Xe)
 
         # Determine success probability:
         probability = (
@@ -224,7 +223,7 @@ class PrimalMeet:
         Logging.log("bdd", log_level, f"H0: {repr(baseline_cost)}")
 
         f = partial(
-            self.cost,
+            PrimalMeet.cost,
             self,
             params,
             zeta=zeta,
@@ -249,6 +248,7 @@ class PrimalMeet:
             return Cost(rop=oo)
         return cost
 
+    @classmethod
     def __call__(
         self,
         params: LWEParameters,
@@ -263,11 +263,7 @@ class PrimalMeet:
         """
         params = LWEParameters.normalize(params)
         red_shape_model = simulator_normalize(red_shape_model)
-        Cost.register_impermanent(
-            {"|S|": False}, mem=False, zeta=False, prob=False,
-            h_=False, h_1=False, h_2=False, ell=False, epsilon=False,
-            rop=True, red=True,
-        )
+        Cost.register_impermanent(h_1=False, h_2=False, ell=False, epsilon=False)
 
         f = partial(
             self.cost_zeta,

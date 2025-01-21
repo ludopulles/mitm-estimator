@@ -986,7 +986,6 @@ def cost(cost_model, beta, d, B=None, predicate=True, **kwds):
     cost = cost_model(beta, d, B)
     delta_ = ReductionCost.delta(beta)
     cost = Cost(rop=cost, red=cost, delta=delta_, beta=beta, d=d, **kwds)
-    cost.register_impermanent(rop=True, red=True, delta=False, beta=False, d=False)
     if predicate is False:
         cost["red"] = oo
         cost["rop"] = oo
@@ -1004,7 +1003,6 @@ def sieving_cost(cost_model, beta):
     )
     num_vectors = RR((4.0/3.0)**(beta / 2))
     cost_ = Cost(rop=time, red=time, beta=beta, mem=num_vectors)
-    cost_.register_impermanent(rop=True, red=True, beta=False, mem=False)
     return cost_
 
 
