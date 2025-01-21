@@ -137,10 +137,11 @@ class CodedBKW:
         ntop = max(params.n - ncod - ntest - t1 * b, 0)
 
         cost = Cost({
+            "b": b, "ell": ell, "t1": t1, "t2": t2,
             "#cod": ncod,  # coding step
             "#top": ntop,  # guessing step, typically zero
             "#test": ntest  # hypothesis testing
-        }, b=b, ell=ell, t1=t1, t2=t2)
+        })
 
         # Theorem 1: quantization noise + addition noise
         coding_variance = params.Xs.stddev**2 * sigma_set**2 * ntot

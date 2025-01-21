@@ -176,15 +176,14 @@ class PrimalMeet:
         if not probability or RR(probability).is_NaN():
             return Cost(rop=oo)
 
-        cost = Cost(
-            {"|S|": search_space},
-            rop=cost_bkz["rop"] + cost_meet["rop"],
-            red=cost_bkz["rop"],
-            mem=cost_meet["mem"],
-            beta=beta, zeta=zeta, d=d, prob=probability,
-            h_=hw, h_1=cost_meet["h_1"], h_2=cost_meet["h_2"],
-            epsilon=cost_meet["epsilon"], ell=cost_meet["ell"],
-        )
+        cost = Cost({
+            "rop": cost_bkz["rop"] + cost_meet["rop"], "red": cost_bkz["rop"],
+            "mem": cost_meet["mem"],
+            "beta": beta, "zeta": zeta, "d": d,
+            "h_": hw, "h_1": cost_meet["h_1"], "h_2": cost_meet["h_2"],
+            "epsilon": cost_meet["epsilon"], "ell": cost_meet["ell"],
+            "|S|": search_space, "prob": probability,
+        })
 
         # 4. Repeat whole experiment ~1/prob times
         cost = cost.repeat(prob_amplify(0.99, probability))
@@ -223,7 +222,6 @@ class PrimalMeet:
 
         f = partial(
             PrimalMeet.cost,
-            self,
             params,
             zeta=zeta,
             simulator=red_shape_model,

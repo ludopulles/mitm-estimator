@@ -424,10 +424,12 @@ class PrimalHybrid:
         if eta <= 20 and d >= 0:  # NOTE: η: somewhat arbitrary bound, d: we may guess it all
             probability *= RR(prob_babai(r, sqrt(d) * params.Xe.stddev))
 
-        cost = Cost(
-            {"|S|": search_space}, beta=beta, eta=eta, zeta=zeta, d=d, prob=probability,
-            rop=bkz_cost["rop"] + svp_cost["rop"], red=bkz_cost["rop"], svp=svp_cost["rop"],
-        )
+        cost = Cost({
+            "rop": bkz_cost["rop"] + svp_cost["rop"],
+            "red": bkz_cost["rop"], "svp": svp_cost["rop"],
+            "beta": beta, "eta": eta, "zeta": zeta, "|S|": search_space, "d": d,
+            "prob": probability,
+        })
         if zeta:
             cost["h_"] = hw
 

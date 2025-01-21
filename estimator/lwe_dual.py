@@ -603,10 +603,9 @@ class MATZOV:
         )
 
         cost = Cost(
-            rop=T_sample + T_guess, red=T_sample, guess=T_guess,  # Runtime
-            prob=p,  # Success probability
-            beta=beta, zeta=k_enum, t=k_fft, beta_=beta_sieve, N=N, m=m,  # Parameters
-            problem=params
+            rop=T_sample + T_guess, red=T_sample, guess=T_guess,
+            beta=beta, zeta=k_enum, t=k_fft, beta_=beta_sieve, N=N, m=m,
+            prob=p, problem=params,
         )
 
         return cost
@@ -862,10 +861,8 @@ class CHHS19:
                 return True
             # This basically boils down to MitM search
             cost = Cost(
-                rop=params.m * t_search,  # Runtime
-                mem=mem_search,  # Memory
-                p=RR(p_search),  # Success probability
-                beta=beta, zeta=zeta, h_=h0  # Parameters
+                rop=params.m * t_search, mem=mem_search,
+                beta=beta, zeta=zeta, h_=h0, prob=RR(p_search),
             )
             rep = prob_amplify(success_probability, cost["prob"])
             return cost.repeat(times=rep) if rep > 1 else cost
@@ -914,10 +911,9 @@ class CHHS19:
         p_error_bounded = (1.0 - 2 * exp(-4*pi))**tau
 
         cost = Cost(
-            rop=t_BKZ + m * t_search, red=t_BKZ,  # Runtime
-            mem=mem_search,  # Memory
-            prob=RR(p_search * p_error_bounded),  # Success probability
-            beta=beta, zeta=zeta, h_=h0, m=m, d=d, m_=tau,  # Parameters
+            rop=t_BKZ + m * t_search, red=t_BKZ, mem=mem_search,
+            beta=beta, zeta=zeta, h_=h0, m=m, d=d, m_=tau,
+            prob=RR(p_search * p_error_bounded),
         )
 
         # print(f"beta={beta}, zeta={zeta}, h0={h0}: T_BKZ = {float(t_BKZ):.2e}, T_search = {float(time_search):.2e}")
