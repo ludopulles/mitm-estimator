@@ -81,22 +81,29 @@ def gaussian_cdf(mu, sigma, t):
 
 def mitm_babai_probability(r, stddev, fast=False):
     """
-    Compute the "e-admissibility" probability associated to the mitm step, according to
+    Compute the "e-admissibility" probability associated to the MitM step, according to
     [WAHC:SonChe19]_
 
     :params r: the squared GSO lengths
     :params stddev: the std.dev of the error distribution
-    :param fast: toggle for setting p = 1 (faster, but underestimates security)
-    :return: probability for the mitm process
+    :param fast: number of coordinates to compute exactly while underestimating security for the
+                 rest (the lower value the faster, but underestimates security).
+                 Set to false to compute the exact value.
+    :return: probability for the MitM process
     """
+    c = RR(1.0 / sqrt(pi))
+
     if fast:
-        # overestimate the probability -> underestimate security
-        return 1
+        # Compute p_adm for the last `num_exact` coordinates exactly, and approximate the others.
+        num_exact = min(fast, len(r))
+        xs = [RR((.5 * ri)**.5) / stddev for ri in r[-num_exact:]]
+        ps = [RR(1.0 - c / x if x > 100 else erf(x) - c * (1 - exp(-x**2)) / x) for x in xs]
+        return ps[0]**(len(r) - num_exact) * prod(ps)
 
     # Note: `r` contains *square norms*, so convert to non-square norms.
     # Follow the proof of Lemma 4.2 [WAHC:SonChe19]_, because that one uses standard deviation.
-    xs = [sqrt(.5 * ri) / stddev for ri in r]
-    p = prod(RR(erf(x) - (1 - exp(-x**2)) / (x * sqrt(pi))) for x in xs)
+    xs = [RR((.5 * ri)**.5) / stddev for ri in r]
+    p = prod(RR(erf(x) - c * (1 - exp(-x**2)) / x) for x in xs)
     assert 0.0 <= p <= 1.0
     return p
 

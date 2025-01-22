@@ -17,7 +17,7 @@ from .lwe_comb import AsymptoticMeetREP1, log_comb
 from .lwe_comb import split_weight, sum_log
 from .lwe_parameters import LWEParameters
 from .lwe_primal import primal_usvp, PrimalUSVP
-from .nd import NoiseDistribution, SparseTernary
+from .nd import SparseTernary
 from .prob import babai_gaussian, mitm_babai_probability, amplify as prob_amplify
 from .reduction import cost as costf, delta as deltaf
 from .simulator import normalize as simulator_normalize
@@ -31,12 +31,10 @@ class PrimalMeet:
     _asymptotic = AsymptoticMeetREP1()
 
     @staticmethod
-    def cost_meet_lwe(
-        q: int,
-        r,
-        search_space: SparseTernary,
-        Xe: NoiseDistribution
-    ):
+    def cost_meet_lwe(q: int, d: int, search_space: SparseTernary):
+        """
+        Compute the cost of doing REP-1 depth 2 Meet-LWE for a given search space.
+        """
         n = search_space.n
         n1, n2 = split_weight(n)
 
@@ -84,23 +82,18 @@ class PrimalMeet:
         # Analyse the runtime
         log_runtime = sum_log(*logL.values())
         # Multiply the runtime by the number of calls to Babai in dimension `d`.
-        log_runtime += log(babai_cost(len(r)))
+        log_runtime += log(babai_cost(d))
 
         # Analyse the success probability
-        prob_rep_survives = mitm_babai_probability(r, Xe.stddev)
         bet_s1 = logS[11] + logS[12] - logS[1]
         bet_s2 = logS[21] + logS[22] - logS[2]
         assert bet_s1 < 0 and bet_s2 < 0
-
         log_bet = bet_s1 + bet_s2
-        prob = prob_rep_survives * exp(log_bet)
 
-        cost = Cost(
-            rop=exp(log_runtime), mem=exp(log_runtime),
-            h_1=w1, h_2=w11, epsilon=asymptotic_epsilon, ell=num_qary_vectors, tag='REP-0 (d=2)'
+        return Cost(
+            rop=exp(log_runtime), mem=exp(log_runtime), prob=exp(log_bet),
+            h_1=w1, h_2=w11, epsilon=asymptotic_epsilon, ell=num_qary_vectors
         )
-
-        return cost, prob
 
     @staticmethod
     @cached_function
@@ -126,18 +119,27 @@ class PrimalMeet:
         assert isinstance(params.Xs, SparseTernary) and params.Xs.p == params.Xs.m
 
         delta = deltaf(beta)
-        d = min(ceil(sqrt((params.n - zeta) * log(params.q) / log(delta))), params.m + (params.n - zeta) - 1)
+        n = params.n - zeta
+        d = min(ceil(sqrt(n * log(params.q) / log(delta))), params.m + n)
         xi = PrimalUSVP._xi_factor(params.Xs, params.Xe)
 
         # 1. Simulate BKZ-β
-        r = simulator(d, params.n - zeta, params.q, beta, xi=xi, tau=None, dual=True)
-        if r[-1] < 12 * params.Xe.stddev:
+        sigma = params.Xe.stddev
+
+        log_last_GS_norm = exp((log(params.q)*(d-n) + log(xi)*n) / d - (d-1) * log(delta))
+        # if sqrt(r[-1]) < 10 * sigma:
+        if log_last_GS_norm < 10 * sigma:
             # Lattice reduction should be sufficiently strong such that p_adm is of value >0.1 or so (e.g. 0.5).
             return Cost(rop=oo)
+        r = simulator(d, n, params.q, beta, xi=xi, tau=None, dual=True)
 
         cost_bkz = costf(red_cost_model, beta, d)
         num_np_available = RR(cost_bkz["rop"] / babai_cost(d))
-        prob_np = RR(babai_gaussian(r, params.Xe.stddev))
+
+        prob_np = RR(babai_gaussian(r, sigma))
+        prob_adm = RR(mitm_babai_probability(r, sigma, fast=1000))
+        # print(f"zeta={zeta}, beta={beta} and r[-1]={float(r[-1] / sigma):6.1g} "
+        #       f"-> {float(RR(mitm_babai_probability(r, sigma))):.5f} vs {float(prob_adm):.5f}")
 
         # 2. Find the best hamming weight of the guess.
         best_cost = Cost(rop=oo)
@@ -159,13 +161,14 @@ class PrimalMeet:
                 hw += 2
                 continue
 
-            cost_meet, prob_meet = PrimalMeet.cost_meet_lwe(params.q, r, search_space, params.Xe)
+            # 3. Determine cost of doing Meet LWE.
+            cost_meet = PrimalMeet.cost_meet_lwe(params.q, d, search_space)
 
-            # 3. Determine success probability and cost.
             probability = (
                 prob_hw  # prob. secret splits with given weights. Note: p_HW ~ 1/n roughly
                 * prob_np  # prob. correct guess lifts with np. Note: p_NP ~ 1.0 (p_NP > p_adm).
-                * prob_meet  # prob. Meet-LWE gives the correct answer.
+                * prob_adm  # prob. s = s1 + s2 has both (s1, s2) in the same bucket.
+                * cost_meet["prob"]  # prob. Meet-LWE gives the correct answer.
             )
 
             cost = Cost({
@@ -183,19 +186,17 @@ class PrimalMeet:
 
             if cost > best_cost:
                 break
-            # print(f"HW={hw} => 2^{RR(log(cost['rop'], 2)):.2f}")
             best_cost = min(best_cost, cost)
             hw += 2
         return best_cost
 
     @classmethod
     def cost_zeta(
-        self,
+        cls,
         zeta: int,
         params: LWEParameters,
         red_shape_model=red_simulator_default,
         red_cost_model=red_cost_model_default,
-        optimize_d=True,
         log_level=5,
         **kwds,
     ):
@@ -229,8 +230,6 @@ class PrimalMeet:
         ) as it:
             for beta in it:
                 it.update(f(beta))
-            for beta in it.neighborhood:
-                it.update(f(beta))
             cost = it.y
 
         Logging.log("bdd", log_level, f"H1: {cost!r}")
@@ -241,7 +240,7 @@ class PrimalMeet:
 
     @classmethod
     def __call__(
-        self,
+        cls,
         params: LWEParameters,
         zeta: int = None,
         red_shape_model=red_shape_model_default,
@@ -257,7 +256,7 @@ class PrimalMeet:
         Cost.register_impermanent(h_1=False, h_2=False, ell=False, epsilon=False)
 
         f = partial(
-            self.cost_zeta,
+            cls.cost_zeta,
             params=params,
             red_shape_model=red_shape_model,
             red_cost_model=red_cost_model,
@@ -265,19 +264,11 @@ class PrimalMeet:
         )
 
         if zeta is None:
-            # Find the smallest value for zeta such that the square root of the search space for
-            # zeta is larger than the number of operations to solve uSVP on the whole LWE instance
-            # (without guessing).
-            usvp_cost = primal_usvp(params, red_cost_model=red_cost_model)["rop"]
-            zeta_max = params.n
-            while zeta_max < params.n and sqrt(params.Xs.resize(zeta_max).support_size()) < usvp_cost:
-                zeta_max += 1
-
-            with local_minimum(0, min(zeta_max, params.n), log_level=log_level) as it:
-                for zeta in it:
-                    it.update(f(zeta=zeta, optimize_d=False, **kwds))
-            # TODO: this should not be required
-            cost = min(it.y, f(0, optimize_d=False, **kwds))
+            cost = Cost(rop=oo)
+            with local_minimum(0, params.n, precision=2, log_level=log_level) as it:
+                for zeta_ in it:
+                    it.update(f(zeta=zeta_, **kwds))
+                cost = it.y
         else:
             cost = f(zeta=zeta)
 
