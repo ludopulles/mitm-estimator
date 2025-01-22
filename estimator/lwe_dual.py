@@ -376,44 +376,44 @@ class DualHybrid:
             >>> LWE.dual(params)
             rop: ≈2^107.0, mem: ≈2^66.4, β: 264, m: 970, d: 1994, tag: dual
             >>> dual_hybrid(params)
-            rop: ≈2^103.2, mem: ≈2^97.4, m: 937, β: 250, d: 1919, ↻: 1, ζ: 42, tag: dual_hybrid
+            rop: ≈2^103.2, mem: ≈2^97.4, β: 250, m: 937, d: 1919, ζ: 42, tag: dual_hybrid
             >>> dual_hybrid(params, mitm_optimization=True)
-            rop: ≈2^130.1, mem: ≈2^127.0, m: 1144, k: 120, ↻: 1, β: 347, d: 2024, ζ: 144, tag: dual_mitm_hybrid
+            rop: ≈2^130.1, mem: ≈2^127.0, k: 120, β: 347, m: 1144, d: 2024, ζ: 144, tag: dual_mitm_hybrid
             >>> dual_hybrid(params, mitm_optimization="numerical")
-            rop: ≈2^129.0, m: 1145, k: 1, mem: ≈2^131.0, ↻: 1, β: 346, d: 2044, ζ: 125, tag: dual_mitm_hybrid
+            rop: ≈2^129.0, k: 1, mem: ≈2^131.0, β: 346, m: 1145, d: 2044, ζ: 125, tag: dual_mitm_hybrid
 
             >>> params = params.updated(Xs=ND.SparseTernary(32))
             >>> LWE.dual(params)
-            rop: ≈2^103.4, mem: ≈2^63.9, m: 904, β: 251, d: 1928, ↻: 1, tag: dual
+            rop: ≈2^103.4, mem: ≈2^63.9, β: 251, m: 904, d: 1928, tag: dual
             >>> dual_hybrid(params)
-            rop: ≈2^91.6, mem: ≈2^77.2, m: 711, β: 168, d: 1456, ↻: ≈2^11.2, ζ: 279, h': 8, tag: dual_hybrid
+            rop: ≈2^91.6, mem: ≈2^77.2, β: 168, ↻: ≈2^11.2, m: 711, d: 1456, ζ: 279, h': 8, tag: dual_hybrid
             >>> dual_hybrid(params, mitm_optimization=True)
-            rop: ≈2^98.7, mem: ≈2^78.6, m: 737, k: 288, ↻: ≈2^19.6, β: 184, d: 1284, ζ: 477, h': 17, tag: dual_mitm_...
+            rop: ≈2^98.7, mem: ≈2^78.6, k: 288, ↻: ≈2^19.6, β: 184, m: 737, d: 1284, ζ: 477, h': 17, tag: dual_mitm_...
 
             >>> params = params.updated(Xs=ND.CenteredBinomial(8))
             >>> LWE.dual(params)
-            rop: ≈2^114.5, mem: ≈2^71.8, m: 1103, β: 291, d: 2127, ↻: 1, tag: dual
+            rop: ≈2^114.5, mem: ≈2^71.8, β: 291, m: 1103, d: 2127, tag: dual
             >>> dual_hybrid(params)
-            rop: ≈2^113.6, mem: ≈2^103.5, m: 1096, β: 288, d: 2110, ↻: 1, ζ: 10, tag: dual_hybrid
+            rop: ≈2^113.6, mem: ≈2^103.5, β: 288, m: 1096, d: 2110, ζ: 10, tag: dual_hybrid
             >>> dual_hybrid(params, mitm_optimization=True)
-            rop: ≈2^155.5, mem: ≈2^146.2, m: 1414, k: 34, ↻: 1, β: 438, d: 2404, ζ: 34, tag: dual_mitm_hybrid
+            rop: ≈2^155.5, mem: ≈2^146.2, k: 34, β: 438, m: 1414, d: 2404, ζ: 34, tag: dual_mitm_hybrid
 
             >>> params = params.updated(Xs=ND.DiscreteGaussian(3.0))
             >>> LWE.dual(params)
-            rop: ≈2^116.5, mem: ≈2^73.2, m: 1140, β: 298, d: 2164, ↻: 1, tag: dual
+            rop: ≈2^116.5, mem: ≈2^73.2, β: 298, m: 1140, d: 2164, tag: dual
             >>> dual_hybrid(params)
-            rop: ≈2^116.2, mem: ≈2^100.4, m: 1137, β: 297, d: 2155, ↻: 1, ζ: 6, tag: dual_hybrid
+            rop: ≈2^116.2, mem: ≈2^100.4, β: 297, m: 1137, d: 2155, ζ: 6, tag: dual_hybrid
             >>> dual_hybrid(params, mitm_optimization=True)
-            rop: ≈2^160.7, mem: ≈2^156.8, m: 1473, k: 25, ↻: 1, β: 456, d: 2472, ζ: 25, tag: dual_mitm_hybrid
+            rop: ≈2^160.7, mem: ≈2^156.8, k: 25, β: 456, m: 1473, d: 2472, ζ: 25, tag: dual_mitm_hybrid
 
             >>> dual_hybrid(schemes.NTRUHPS2048509Enc)
-            rop: ≈2^136.2, mem: ≈2^127.8, m: 434, β: 356, d: 902, ↻: 35, ζ: 40, h': 19, tag: dual_hybrid
+            rop: ≈2^136.2, mem: ≈2^127.8, β: 356, ↻: 35, m: 434, d: 902, ζ: 40, h': 19, tag: dual_hybrid
 
             >>> LWE.dual(schemes.CHHS_4096_67)
-            rop: ≈2^206.9, mem: ≈2^137.5, m: ≈2^11.8, β: 616, d: 7779, ↻: 1, tag: dual
+            rop: ≈2^206.9, mem: ≈2^137.5, β: 616, m: ≈2^11.8, d: 7779, tag: dual
 
             >>> dual_hybrid(schemes.Kyber512, red_cost_model=RC.GJ21, fft=True)
-            rop: ≈2^149.8, mem: ≈2^92.1, m: 510, t: 76, β: 399, d: 1000, ↻: 1, ζ: 22, tag: dual_hybrid
+            rop: ≈2^149.8, mem: ≈2^92.1, t: 76, β: 399, m: 510, d: 1000, ζ: 22, tag: dual_hybrid
 
         """
         Logging.log("dual", log_level, f"costing LWE instance: {repr(params)}")

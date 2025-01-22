@@ -151,13 +151,12 @@ class Cost(UserDict):
         r = {k: self[k] for k in keys if k in self.keys()}
         return Cost(**r)
 
-    def repeat(self, times, select=None):
+    def repeat(self, times):
         """
         Return a report with all costs multiplied by ``times``.
 
-        :param times:  the number of times it should be run
-        :param select: toggle which fields ought to be repeated and which should not
-        :returns:      a new cost estimate
+        :param times: the number of times it should be run
+        :return: a new cost estimate
 
         EXAMPLE::
 
@@ -174,19 +173,17 @@ class Cost(UserDict):
             rop: ≈2^19.9, ↻: ≈2^19.9
 
         """
-        impermanents = dict(self.impermanents)
-
-        if select is not None:
-            impermanents.update(select)
+        if times == 1:
+            return self
 
         try:
-            new_cost = {k: times * v if impermanents[k] else v for k, v in self.items()}
+            new_cost = {k: times * v if self.impermanents[k] else v for k, v in self.items()}
             new_cost["repetitions"] = times * new_cost.get("repetitions", 1)
             return Cost(**new_cost)
         except KeyError as error:
             raise NotImplementedError(
                 f"You found a bug, this function does not know about about a key but should: {error}"
-            )
+            ) from error
 
     def __rmul__(self, times):
         return self.repeat(times)

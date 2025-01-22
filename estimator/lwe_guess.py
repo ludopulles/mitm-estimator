@@ -266,7 +266,7 @@ class MITM:
         repeat = prob_amplify(
             success_probability, sd_p**n * nd_p**m_required * success_probability_
         )
-        return cost.repeat(times=repeat)
+        return cost.repeat(repeat)
 
     def cost(
         self,
@@ -321,7 +321,7 @@ class MITM:
 
         cost = Cost(rop=(cost_table + cost_search), m=m, k=k, mem=mem_usage)
         repeat = prob_amplify(success_probability, sd_p**n * nd_p**m * success_probability_)
-        return cost.repeat(times=repeat)
+        return cost.repeat(repeat)
 
     def __call__(self, params: LWEParameters, success_probability=0.99, optimization=mitm_opt):
         """
@@ -346,9 +346,9 @@ class MITM:
             >>> from estimator.lwe_guess import mitm
             >>> params = LWE.Parameters(n=64, q=2**40, Xs=ND.Binary, Xe=ND.DiscreteGaussian(3.2))
             >>> mitm(params)
-            rop: ≈2^37.0, mem: ≈2^37.2, m: 37, k: 32, ↻: 1
+            rop: ≈2^37.0, mem: ≈2^37.2, m: 37, k: 32
             >>> mitm(params, optimization="numerical")
-            rop: ≈2^39.2, m: 36, k: 32, mem: ≈2^39.1, ↻: 1
+            rop: ≈2^39.2, m: 36, k: 32, mem: ≈2^39.1
             >>> params = LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseTernary(32), Xe=ND.DiscreteGaussian(3.2))
             >>> mitm(params)
             rop: ≈2^217.8, mem: ≈2^210.2, m: ≈2^15.5, k: 512, ↻: 226
