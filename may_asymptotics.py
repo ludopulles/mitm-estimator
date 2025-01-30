@@ -101,7 +101,7 @@ def optimal_epsilon(depth, omega):
         if g(0.0) > 0:
             # More time is already spent on the Odlyzko layer, so this is basically REP-0 (eps=0).
             return 0.0
-        return binary_search_f(g, 0, 0.5 - omega)
+        return binary_search_f(g, 0, 0.5 * omega)
 
     # First minimize the time spent on the base layer, by performing a ternary search.
     def f(eps):
