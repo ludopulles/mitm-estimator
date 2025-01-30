@@ -31,6 +31,13 @@ class PrimalMeet:
     _asymptotic = AsymptoticMeetREP1()
 
     @staticmethod
+    @cached_function
+    def concrete_epsilon(n: int, w0: int):
+        epsilon = int(round(n * PrimalMeet._asymptotic.optimal_epsilon(2, w0 / n)))
+        # print(f"n={n}, w={w0}: {epsilon}")
+        return epsilon
+
+    @staticmethod
     def cost_meet_lwe(q: int, d: int, search_space: SparseTernary):
         """
         Compute the cost of doing REP-1 depth 2 Meet-LWE for a given search space.
@@ -43,17 +50,19 @@ class PrimalMeet:
         w0 = w // 2
         w1, w2 = split_weight(w0)
 
-        asymptotic_epsilon = int(round(n * PrimalMeet._asymptotic.optimal_epsilon(2, w0 / n)))
-        w1 += asymptotic_epsilon
-        w2 += asymptotic_epsilon
+        epsilon = PrimalMeet.concrete_epsilon(n, w0)
+        # TODO: iteratively loop over epsilon, as it's most likely equal to 2.
+
+        w1 += epsilon
+        w2 += epsilon
 
         w11, w12 = split_weight(w1)
         w21, w22 = split_weight(w2)
 
         # Number of ways that we can construct s from s1 + s2.
-        log_R1 = (log_comb(n - w, asymptotic_epsilon, asymptotic_epsilon)
-                  + log_comb(w0, w1 - asymptotic_epsilon)
-                  + log_comb(w0, w2 - asymptotic_epsilon))
+        log_R1 = (log_comb(n - w, epsilon, epsilon)
+                  + log_comb(w0, w1 - epsilon)
+                  + log_comb(w0, w2 - epsilon))
 
         # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched, while
         # fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
@@ -92,7 +101,7 @@ class PrimalMeet:
 
         return Cost(
             rop=exp(log_runtime), mem=exp(log_runtime), prob=exp(log_bet),
-            h_1=w1, h_2=w11, epsilon=asymptotic_epsilon, ell=num_qary_vectors
+            h_1=w1, h_2=w11, epsilon=epsilon, ell=num_qary_vectors
         )
 
     @staticmethod
@@ -278,5 +287,8 @@ class PrimalMeet:
 
     __name__ = "primal_meet"
 
+
+# Lower precision.
+PrimalMeet._asymptotic.BS_PRECISION = 10
 
 primal_meet = PrimalMeet()
