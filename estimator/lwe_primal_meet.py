@@ -32,10 +32,32 @@ class PrimalMeet:
 
     @staticmethod
     @cached_function
-    def concrete_epsilon(n: int, w0: int):
-        epsilon = int(round(n * PrimalMeet._asymptotic.optimal_epsilon(2, w0 / n)))
-        # print(f"n={n}, w={w0}: {epsilon}")
-        return epsilon
+    def concrete_epsilon(n: int, w: int):
+        """
+        Make a lightweight computation for the optimal epsilon that minimizes `runtime / probability`.
+        This function saves on computations in `cost_meet_lwe` in the sense that it doesn't compute the cost for
+        floor(n/2) and ceil(n/2) separately but considers these both to be ceil(n/2).
+        """
+        w0 = w // 2
+        # return int(round(n * PrimalMeet._asymptotic.optimal_epsilon(2, w0 / n)))
+        eps, best_eps, best_cost = 0, 0, oo
+        while 2 * eps < n - w and eps <= w0 // 2:
+            w1 = (w0 + 1) // 2 + eps
+            w11 = (w1 + 1) // 2 + 0
+            log_R1 = log_comb(n - w, eps, eps) + 2 * log_comb(w0, w1 - eps)
+            log_S1 = log_comb(n, w1, w1)
+            log_S11 = log_comb((n + 1) // 2, w11, w11)
+
+            log_runtime = sum_log(log_S11 + RR(log(4)), log_S1 - log_R1 + RR(log(2)))
+            log_bet = 2 * (2 * log_S11 - log_S1)
+            log_cost = log_runtime - log_bet
+            if eps > 4 and log_cost > best_cost:
+                break
+            elif log_cost < best_cost:
+                best_cost = log_cost
+                best_eps = eps
+            eps += 1
+        return best_eps
 
     @staticmethod
     def cost_meet_lwe(q: int, d: int, search_space: SparseTernary):
@@ -50,9 +72,7 @@ class PrimalMeet:
         w0 = w // 2
         w1, w2 = split_weight(w0)
 
-        epsilon = PrimalMeet.concrete_epsilon(n, w0)
-        # TODO: iteratively loop over epsilon, as it's most likely equal to 2.
-
+        epsilon = PrimalMeet.concrete_epsilon(n, w)
         w1 += epsilon
         w2 += epsilon
 
