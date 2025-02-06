@@ -13,8 +13,7 @@ from .conf import red_shape_model as red_shape_model_default
 from .conf import red_simulator as red_simulator_default
 from .cost import Cost
 from .io import Logging
-from .lwe_comb import AsymptoticMeetREP1, log_comb
-from .lwe_comb import split_weight, sum_log
+from .lwe_comb import log_comb, split_weight, sum_log
 from .lwe_parameters import LWEParameters
 from .lwe_primal import primal_usvp, PrimalUSVP
 from .nd import SparseTernary
@@ -28,36 +27,6 @@ class PrimalMeet:
     """
     Estimate cost of solving LWE via a hybrid of primal attack and Meet-LWE [HKLS22].
     """
-    _asymptotic = AsymptoticMeetREP1()
-
-    @staticmethod
-    @cached_function
-    def concrete_epsilon(n: int, w: int):
-        """
-        Make a lightweight computation for the optimal epsilon that minimizes `runtime / probability`.
-        This function saves on computations in `cost_meet_lwe` in the sense that it doesn't compute the cost for
-        floor(n/2) and ceil(n/2) separately but considers these both to be ceil(n/2).
-        """
-        w0 = w // 2
-        # return int(round(n * PrimalMeet._asymptotic.optimal_epsilon(2, w0 / n)))
-        eps, best_eps, best_cost = 0, 0, oo
-        while 2 * eps < n - w and eps <= w0 // 2:
-            w1 = (w0 + 1) // 2 + eps
-            w11 = (w1 + 1) // 2 + 0
-            log_R1 = log_comb(n - w, eps, eps) + 2 * log_comb(w0, w1 - eps)
-            log_S1 = log_comb(n, w1, w1)
-            log_S11 = log_comb((n + 1) // 2, w11, w11)
-
-            log_runtime = sum_log(log_S11 + RR(log(4)), log_S1 - log_R1 + RR(log(2)))
-            log_bet = 2 * (2 * log_S11 - log_S1)
-            log_cost = log_runtime - log_bet
-            if eps > 4 and log_cost > best_cost:
-                break
-            elif log_cost < best_cost:
-                best_cost = log_cost
-                best_eps = eps
-            eps += 1
-        return best_eps
 
     @staticmethod
     def cost_meet_lwe(q: int, d: int, search_space: SparseTernary):
@@ -70,59 +39,65 @@ class PrimalMeet:
         # The secret has `w0` coefficients equal to 1, and `w0` equal to -1.
         w = search_space.hamming_weight
         w0 = w // 2
-        w1, w2 = split_weight(w0)
 
-        epsilon = PrimalMeet.concrete_epsilon(n, w)
-        w1 += epsilon
-        w2 += epsilon
+        # Find the best epsilon by exhaustive search.
+        # In practice, `epsilon` is 1, 2 or 3 so keep the range limited for performance.
+        best_cost = Cost(rop=oo, prob=1.0)
+        for epsilon in range(1, 5):
+            w1, w2 = split_weight(w0 + 2 * epsilon)  # Adds epsilon to each of w1 and w2.
+            w11, w12 = split_weight(w1)
+            w21, w22 = split_weight(w2)
 
-        w11, w12 = split_weight(w1)
-        w21, w22 = split_weight(w2)
+            # Number of ways that we can construct s from s1 + s2.
+            if n - w < 2 * epsilon or w0 < w2 - epsilon:
+                break
+            log_R1 = (log_comb(n - w, epsilon, epsilon)
+                      + log_comb(w0, w1 - epsilon)
+                      + log_comb(w0, w2 - epsilon))
 
-        # Number of ways that we can construct s from s1 + s2.
-        log_R1 = (log_comb(n - w, epsilon, epsilon)
-                  + log_comb(w0, w1 - epsilon)
-                  + log_comb(w0, w2 - epsilon))
+            # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched, while
+            # fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
+            # This is slightly naive, but alternatively we could also meet keys somewhere in the intermediate part of
+            # the basis. However, in that case, you need to take the mitm_babai_probability of the meet-buckets, instead of
+            # the Babai domain.
+            logq = RR(log(q))
+            num_qary_vectors = ceil(log_R1 / logq)
+            # assert log_R1 < logq
 
-        # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched, while
-        # fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
-        # This is slightly naive, but alternatively we could also meet keys somewhere in the intermediate part of
-        # the basis. However, in that case, you need to take the mitm_babai_probability of the meet-buckets, instead of
-        # the Babai domain.
-        logq = RR(log(q))
-        num_qary_vectors = ceil(log_R1 / logq)
-        # assert log_R1 < logq
+            logS = {}  # log(size of search space)
+            logL = {}  # log(size of list of stored candidates)
 
-        logS = {}  # log(size of search space)
-        logL = {}  # log(size of list of stored candidates)
+            # Analyse level 2.
+            logL[11] = logS[11] = log_comb(n1, w11, w11)
+            logL[12] = logS[12] = log_comb(n2, w12, w12)
+            logL[21] = logS[21] = log_comb(n1, w21, w21)
+            logL[22] = logS[22] = log_comb(n2, w22, w22)
 
-        # Analyse level 2.
-        logL[11] = logS[11] = log_comb(n1, w11, w11)
-        logL[12] = logS[12] = log_comb(n2, w12, w12)
-        logL[21] = logS[21] = log_comb(n1, w21, w21)
-        logL[22] = logS[22] = log_comb(n2, w22, w22)
+            # Analyse level 1.
+            logS[1] = log_comb(n, w1, w1)
+            logS[2] = log_comb(n, w2, w2)
+            logL[1] = logS[1] - log_R1
+            logL[2] = logS[2] - log_R1
 
-        # Analyse level 1.
-        logS[1] = log_comb(n, w1, w1)
-        logS[2] = log_comb(n, w2, w2)
-        logL[1] = logS[1] - log_R1
-        logL[2] = logS[2] - log_R1
+            # Analyse the runtime
+            log_runtime = sum_log(*logL.values())
+            # Multiply the runtime by the number of calls to Babai in dimension `d`.
+            log_runtime += log(babai_cost(d))
 
-        # Analyse the runtime
-        log_runtime = sum_log(*logL.values())
-        # Multiply the runtime by the number of calls to Babai in dimension `d`.
-        log_runtime += log(babai_cost(d))
+            # Analyse the success probability
+            bet_s1 = logS[11] + logS[12] - logS[1]
+            bet_s2 = logS[21] + logS[22] - logS[2]
+            assert bet_s1 < 0 and bet_s2 < 0
+            log_bet = bet_s1 + bet_s2
 
-        # Analyse the success probability
-        bet_s1 = logS[11] + logS[12] - logS[1]
-        bet_s2 = logS[21] + logS[22] - logS[2]
-        assert bet_s1 < 0 and bet_s2 < 0
-        log_bet = bet_s1 + bet_s2
-
-        return Cost(
-            rop=exp(log_runtime), mem=exp(log_runtime), prob=exp(log_bet),
-            h_1=w1, h_2=w11, epsilon=epsilon, ell=num_qary_vectors
-        )
+            cost = Cost(
+                rop=exp(log_runtime), mem=exp(log_runtime), prob=exp(log_bet),
+                h_1=w1, h_2=w11, epsilon=epsilon, ell=num_qary_vectors
+            )
+            # As this Meet-LWE causes restarts on failure, minimize the Time/Probability ratio.
+            if cost["rop"] / cost["prob"] < best_cost["rop"] / best_cost["prob"]:
+                best_cost = cost
+        return best_cost
 
     @staticmethod
     @cached_function
@@ -307,8 +282,5 @@ class PrimalMeet:
 
     __name__ = "primal_meet"
 
-
-# Lower precision.
-PrimalMeet._asymptotic.BS_PRECISION = 10
 
 primal_meet = PrimalMeet()
