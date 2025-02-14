@@ -6,6 +6,7 @@ See :ref:`LWE Combinatorial Attacks` for an introduction what is available.
 (TODO: write documentation on that page)
 """
 from sage.all import binomial, exp, floor, log, oo, round, RR
+from math import log as logf, exp as expf
 
 from .cost import Cost
 from .lwe_parameters import LWEParameters
@@ -29,9 +30,9 @@ def log_comb(n, *L):
     assert sum(L) <= n
     res = 0.0
     for x in L:
-        res += log(binomial(n, x))
+        res += logf(RR(binomial(n, x)))
         n -= x
-    return RR(res)
+    return res
 
 
 def sum_log(*L):
@@ -47,7 +48,7 @@ def sum_log(*L):
         return L[0]
 
     max_L = max(L)
-    return max_L + log(sum(exp(x - max_L) for x in L))
+    return max_L + logf(sum(expf(x - max_L) for x in L))
 
 
 def split_weight(n):
