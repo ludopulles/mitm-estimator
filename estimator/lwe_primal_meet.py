@@ -55,11 +55,11 @@ class PrimalMeet:
                       + log_comb(w0, w1 - epsilon)
                       + log_comb(w0, w2 - epsilon))
 
-            # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched, while
-            # fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
+            # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched,
+            # while fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
             # This is slightly naive, but alternatively we could also meet keys somewhere in the intermediate part of
-            # the basis. However, in that case, you need to take the mitm_babai_probability of the meet-buckets, instead of
-            # the Babai domain.
+            # the basis. However, in that case, you need to take the mitm_babai_probability of the meet-buckets,
+            # instead of the Babai domain.
             logq = RR(log(q))
             num_qary_vectors = ceil(log_R1 / logq)
             # assert log_R1 < logq
