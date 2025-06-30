@@ -444,6 +444,19 @@ class PrimalHybrid:
 
         """
 
+        if params.Xs.is_sparse and zeta > 0:
+            best_cost, hw = Cost(rop=oo), 0
+            while hw <= min(params.Xs.hamming_weight, zeta):
+                cost = PrimalHybrid.cost_precise(
+                    params, beta, zeta, hw, babai, mitm, simulator,
+                    red_cost_model, log_level
+                )
+                if cost > best_cost:
+                    break
+                best_cost = cost
+                hw += 1
+            return best_cost
+
         if d is None:
             delta = deltaf(beta)
             d = min(ceil(sqrt(params.n * log(params.q) / log(delta))), m) + 1
