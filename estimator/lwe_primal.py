@@ -354,7 +354,7 @@ class PrimalHybrid:
 
         tau = False if params._homogeneous else params.Xe.stddev
         m = min(params.m, ceil(sqrt(subparams.n * log(params.q) / log(deltaf(beta)))) - subparams.n)
-        d = m + subparams.n + (0 if params._homogeneous else 0)
+        d = m + subparams.n + (0 if params._homogeneous else 1)
 
         r = simulator(d, subparams.n, params.q, beta, xi=xi, tau=tau, dual=True)
         bkz_cost = costf(red_cost_model, beta, d)
@@ -443,6 +443,7 @@ class PrimalHybrid:
            costs.
 
         """
+
         if d is None:
             delta = deltaf(beta)
             d = min(ceil(sqrt(params.n * log(params.q) / log(delta))), m) + 1
