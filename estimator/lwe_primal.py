@@ -397,7 +397,7 @@ class PrimalHybrid:
             svp_cost = svp_cost.repeat(ssf(num_guesses))
 
         if mitm:
-            assert not babai  # TODO: analyze probability when not using Babai NP.
+            assert babai is True  # TODO: analyze probability when not using Babai NP.
             p_hw *= mitm_babai_probability(r, params.Xe.stddev)
 
         p = p_hw  # RR(p_hw * prob_babai(r, sqrt(d) * params.Xe.stddev))
@@ -598,7 +598,11 @@ class PrimalHybrid:
         Logging.log("bdd", log_level, f"H1: {cost!r}")
 
         # step 2. optimize d
-        if cost and cost.get("tag", "XXX") != "usvp" and optimize_d:
+        if (
+            cost and optimize_d
+            and cost.get("tag", "XXX") != "usvp"
+            and params.n < cost["d"] + cost["zeta"] + 1
+        ):
             with local_minimum(
                 params.n, cost["d"] + cost["zeta"] + 1, log_level=log_level + 1
             ) as it:
