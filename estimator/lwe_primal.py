@@ -23,6 +23,7 @@ from .reduction import delta as deltaf
 from .simulator import normalize as simulator_normalize
 from .util import babai_cost, local_minimum, log_gh
 
+
 class PrimalUSVP:
     """
     Estimate cost of solving LWE via uSVP reduction.
@@ -297,7 +298,7 @@ class PrimalHybrid:
         """
         # Find smallest eta ∈ [2, d] satisfying the success condition from [USENIX:ADPS16]_.
         # However, important detail: to prevent false positives, first try eta ∈ [beta, d].
-        d, eta = len(r), beta
+        d, eta = len(r), beta + 1
         log_proj_vol = sum(0.5 * log(r_i) for r_i in r[d - eta:])
         # Loop invariant:
         # log_proj_vol = log(Vol(Lambda(b_{d-eta}, b_{d-eta+1}, ..., b_{d-1})))
@@ -305,6 +306,11 @@ class PrimalHybrid:
         def has_success():
             # Assumes log_proj_vol = log(Vol(Lambda(b_{d-eta}, b_{d-eta+1}, ..., b_{d-1})))
             return D.stddev**2 * eta <= exp(2.0 * log_gh(eta, log_proj_vol, False))
+
+        if eta > d:
+            eta = d
+            if not has_success():
+                return d + 1  # Impossible to solve.
 
         if has_success():
             # It appears the size of our SVP call can be even smaller than beta. Now, we iteratively decrease eta as
