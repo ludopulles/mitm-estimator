@@ -91,7 +91,7 @@ class PrimalMeet:
             log_bet = bet_s1 + bet_s2
 
             cost = Cost(
-                rop=exp(log_runtime), mem=exp(log_runtime), prob=exp(log_bet),
+                rop=RR(exp(log_runtime)), mem=RR(exp(log_runtime)), prob=RR(exp(log_bet)),
                 h_1=w1, h_2=w11, epsilon=epsilon, ell=num_qary_vectors
             )
             # As this Meet-LWE causes restarts on failure, minimize the Time/Probability ratio.
@@ -150,7 +150,7 @@ class PrimalMeet:
 
         # i.e. iteratively increase the HW until the number of guesses becomes too much.
         h, hw = params.Xs.hamming_weight, 0
-        while hw + 2 <= min(h, zeta):
+        while hw <= min(h, zeta):
             search_space = params.Xs.split_balanced(zeta, hw)[0]
             # Note: exponent 0.25 is very optimistic.
             # Searching all these keys will cost much more time...
