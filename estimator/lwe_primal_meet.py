@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
+# pylint: disable=C0103
 """
 Estimate cost of solving LWE using primal attacks.
 
 See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
+# from copy import copy
 from functools import partial
-from sage.all import oo, cached_function, ceil, exp, log, RR, sqrt
+from sage.all import oo, cached_function, ceil, exp, floor, log, pi, RR, sqrt
 
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
@@ -29,9 +31,14 @@ class PrimalMeet:
     """
 
     @staticmethod
-    def cost_meet_lwe(q: int, d: int, search_space: SparseTernary):
+    def cost_meet_lwe(search_space: SparseTernary, r: int, sigma: float):
         """
         Compute the cost of doing REP-1 depth 2 Meet-LWE for a given search space.
+
+        :param search_space: search space to perform REP-1 over.
+        :param r: simulated profile of reduced basis over which to meet.
+        :param sigma: stddev of error (noise).
+
         """
         n = search_space.n
         n1, n2 = split_weight(n)
@@ -51,18 +58,14 @@ class PrimalMeet:
             # Number of ways that we can construct s from s1 + s2.
             if n - w < 2 * epsilon or w0 < w2 - epsilon:
                 break
+
+            # s has n-w zero entries:
+            # `epsilon` come from 1 - 1, `epsilon` from -1 + 1, and rest from 0 + 0.
+            # Half of the w0 +1's in s come from s1, and the other half from s2.
+            # Similarly for the -1's.
             log_R1 = (log_comb(n - w, epsilon, epsilon)
                       + log_comb(w0, w1 - epsilon)
                       + log_comb(w0, w2 - epsilon))
-
-            # This code assumes that lattice reduction leaves some q-ary vectors at the start of the basis untouched,
-            # while fully reducing the end of the basis (i.e. making its Gram--Schmidt norms LONGER).
-            # This is slightly naive, but alternatively we could also meet keys somewhere in the intermediate part of
-            # the basis. However, in that case, you need to take the mitm_babai_probability of the meet-buckets,
-            # instead of the Babai domain.
-            logq = RR(log(q))
-            num_qary_vectors = ceil(log_R1 / logq)
-            # assert log_R1 < logq
 
             logS = {}  # log(size of search space)
             logL = {}  # log(size of list of stored candidates)
@@ -81,8 +84,6 @@ class PrimalMeet:
 
             # Analyse the runtime
             log_runtime = sum_log(*logL.values())
-            # Multiply the runtime by the number of calls to Babai in dimension `d`.
-            log_runtime += log(babai_cost(d))
 
             # Analyse the success probability
             bet_s1 = logS[11] + logS[12] - logS[1]
@@ -90,9 +91,35 @@ class PrimalMeet:
             assert bet_s1 < 0 and bet_s2 < 0
             log_bet = bet_s1 + bet_s2
 
+            # Logarithm of the number of buckets needed to have an efficient meet algorithm.
+            # When using less, some buckets might get overcrowded, so listing near-collisions
+            # becomes slow.
+            log_idx = RR(max(logS[1], logS[2]))
+
+            log_meet_leftover, dim_babai = log_idx, 0
+            bound_meet = RR((len(r) * sigma)**2 * 2/pi)
+            # Note: `r` contains *square norms*, so don't forget to take square roots...
+            # r = copy(r)
+
+            for i in range(len(r))[::-1]:
+                dim_babai += 1
+                if r[i] > bound_meet:
+                    c_i = floor((r[i] / bound_meet)**.5)
+                    # r[i] /= c_i**2
+                    log_meet_leftover -= RR(log(c_i))
+                    if log_meet_leftover < 0:
+                        break
+
+#            prob_adm = RR(mitm_babai_probability(r, sigma, fast=1000))
+
+            # Multiply the runtime by the number of calls to Babai in dimension `d`.
+            # And multiply the success probability with the admissibility probability.
+            log_runtime += log(babai_cost(dim_babai))
+#            log_bet += log(prob_adm)
+
             cost = Cost(
                 rop=RR(exp(log_runtime)), mem=RR(exp(log_runtime)), prob=RR(exp(log_bet)),
-                h_1=w1, h_2=w11, epsilon=epsilon, ell=num_qary_vectors
+                h_1=w1, h_2=w11, epsilon=epsilon, log_idx=log_idx, dim_babai=dim_babai,
             )
             # As this Meet-LWE causes restarts on failure, minimize the Time/Probability ratio.
             if cost["rop"] / cost["prob"] < best_cost["rop"] / best_cost["prob"]:
@@ -107,7 +134,6 @@ class PrimalMeet:
         zeta: int,
         simulator=red_simulator_default,
         red_cost_model=red_cost_model_default,
-        log_level=5,
     ):
         """
         Cost of the Primal Meet-LWE attack.
@@ -137,8 +163,7 @@ class PrimalMeet:
             return Cost(rop=oo)
         r = simulator(d, n, params.q, beta, xi=xi, tau=None, dual=True)
 
-        cost_bkz = costf(red_cost_model, beta, d)
-        num_np_available = RR(cost_bkz["rop"] / babai_cost(d))
+        cost_bkz = RR(costf(red_cost_model, beta, d)["rop"])
 
         prob_np = RR(babai_gaussian(r, sigma))
         prob_adm = RR(mitm_babai_probability(r, sigma, fast=1000))
@@ -152,11 +177,6 @@ class PrimalMeet:
         h, hw = params.Xs.hamming_weight, 0
         while hw <= min(h, zeta):
             search_space = params.Xs.split_balanced(zeta, hw)[0]
-            # Note: exponent 0.25 is very optimistic.
-            # Searching all these keys will cost much more time...
-            if RR(search_space.support_size()**0.25) >= num_np_available:
-                break
-
             prob_hw = params.Xs.split_probability(zeta, hw)
             if prob_hw < 2**-20:
                 # Very unlikely in this attack that the secret splits in this way.
@@ -166,7 +186,7 @@ class PrimalMeet:
                 continue
 
             # 3. Determine cost of doing Meet LWE.
-            cost_meet = PrimalMeet.cost_meet_lwe(params.q, d, search_space)
+            cost_meet = PrimalMeet.cost_meet_lwe(search_space, r, sigma)
 
             probability = (
                 prob_hw  # prob. secret splits with given weights. Note: p_HW ~ 1/n roughly
@@ -176,11 +196,11 @@ class PrimalMeet:
             )
 
             cost = Cost({
-                "rop": cost_bkz["rop"] + cost_meet["rop"], "red": cost_bkz["rop"],
+                "rop": cost_bkz + cost_meet["rop"], "red": cost_bkz,
                 "mem": cost_meet["mem"],
                 "beta": beta, "zeta": zeta, "d": d,
                 "h_": hw, "h_1": cost_meet["h_1"], "h_2": cost_meet["h_2"],
-                "epsilon": cost_meet["epsilon"], "ell": cost_meet["ell"],
+                "epsilon": cost_meet["epsilon"], "d_": cost_meet["dim_babai"],
                 "|S|": search_space, "prob": probability,
             })
 
@@ -257,7 +277,7 @@ class PrimalMeet:
         """
         params = LWEParameters.normalize(params)
         red_shape_model = simulator_normalize(red_shape_model)
-        Cost.register_impermanent(h_1=False, h_2=False, ell=False, epsilon=False)
+        Cost.register_impermanent(h_1=False, h_2=False, d_=False, epsilon=False)
 
         f = partial(
             cls.cost_zeta,
