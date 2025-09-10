@@ -50,14 +50,15 @@ class PrimalMeet:
         # Find the best epsilon by exhaustive search.
         # In practice, `epsilon` is 1, 2 or 3 so keep the range limited for performance.
         best_cost = Cost(rop=oo, prob=1.0)
-        for epsilon in range(1, 5):
+
+        def cost_epsilon(epsilon):
             w1, w2 = split_weight(w0 + 2 * epsilon)  # Adds epsilon to each of w1 and w2.
             w11, w12 = split_weight(w1)
             w21, w22 = split_weight(w2)
 
             # Number of ways that we can construct s from s1 + s2.
             if n - w < 2 * epsilon or w0 < w2 - epsilon:
-                break
+                return None
 
             # s has n-w zero entries:
             # `epsilon` come from 1 - 1, `epsilon` from -1 + 1, and rest from 0 + 0.
@@ -117,13 +118,27 @@ class PrimalMeet:
             log_runtime += log(babai_cost(dim_babai))
 #            log_bet += log(prob_adm)
 
-            cost = Cost(
+            return Cost(
                 rop=RR(exp(log_runtime)), mem=RR(exp(log_runtime)), prob=RR(exp(log_bet)),
                 h_1=w1, h_2=w11, epsilon=epsilon, log_idx=log_idx, dim_babai=dim_babai,
             )
+
+        max_epsilon = 4
+        # Compute costs for all `epsilon <= max_epsilon`, and pick the best.
+        for epsilon in range(1, max_epsilon + 1):
+            cost = cost_epsilon(epsilon)
+            if not cost:
+                break
             # As this Meet-LWE causes restarts on failure, minimize the Time/Probability ratio.
             if cost["rop"] / cost["prob"] < best_cost["rop"] / best_cost["prob"]:
                 best_cost = cost
+        # Try to improve the epsilon until a worse one is found
+        while best_cost["epsilon"] == max_epsilon:
+            max_epsilon += 1
+            cost = cost_epsilon(max_epsilon)
+            if cost and cost["rop"] / cost["prob"] < best_cost["rop"] / best_cost["prob"]:
+                best_cost = cost
+
         return best_cost
 
     @staticmethod
