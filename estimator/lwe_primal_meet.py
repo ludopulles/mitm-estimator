@@ -31,7 +31,7 @@ class PrimalMeet:
     """
 
     @staticmethod
-    def cost_meet_lwe(search_space: SparseTernary, r: int, sigma: float):
+    def cost_meet_lwe(search_space: SparseTernary, r: int, sigma: float, prob_adm: float):
         """
         Compute the cost of doing REP-1 depth 2 Meet-LWE for a given search space.
 
@@ -118,8 +118,11 @@ class PrimalMeet:
             log_runtime += log(babai_cost(dim_babai))
 #            log_bet += log(prob_adm)
 
+            # Repeat the MEET algorithm 1/ (exp(log_bet) p_{adm}) times.
+            # All these repetitions fail with probability of 1/e.
+            runtime, prob = RR(exp(log_runtime - log_bet) / prob_adm), RR(1 - exp(-1))
             return Cost(
-                rop=RR(exp(log_runtime)), mem=RR(exp(log_runtime)), prob=RR(exp(log_bet)),
+                rop=runtime, mem=runtime, prob=prob,
                 h_1=w1, h_2=w11, epsilon=epsilon, log_idx=log_idx, dim_babai=dim_babai,
             )
 
@@ -130,13 +133,13 @@ class PrimalMeet:
             if not cost:
                 break
             # As this Meet-LWE causes restarts on failure, minimize the Time/Probability ratio.
-            if cost["rop"] / cost["prob"] < best_cost["rop"] / best_cost["prob"]:
+            if cost["rop"] < best_cost["rop"]:
                 best_cost = cost
         # Try to improve the epsilon until a worse one is found
         while best_cost["epsilon"] == max_epsilon:
             max_epsilon += 1
             cost = cost_epsilon(max_epsilon)
-            if cost and cost["rop"] / cost["prob"] < best_cost["rop"] / best_cost["prob"]:
+            if cost["rop"] < best_cost["rop"]:
                 best_cost = cost
 
         return best_cost
@@ -201,12 +204,12 @@ class PrimalMeet:
                 continue
 
             # 3. Determine cost of doing Meet LWE.
-            cost_meet = PrimalMeet.cost_meet_lwe(search_space, r, sigma)
+            cost_meet = PrimalMeet.cost_meet_lwe(search_space, r, sigma, prob_adm)
 
             probability = (
                 prob_hw  # prob. secret splits with given weights. Note: p_HW ~ 1/n roughly
                 * prob_np  # prob. correct guess lifts with np. Note: p_NP ~ 1.0 (p_NP > p_adm).
-                * prob_adm  # prob. s = s1 + s2 has both (s1, s2) in the same bucket.
+                # * prob_adm  # prob. s = s1 + s2 has both (s1, s2) in the same bucket. (now part of MEET-LWE)
                 * cost_meet["prob"]  # prob. Meet-LWE gives the correct answer.
             )
 
