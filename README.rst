@@ -47,9 +47,9 @@ Usage examples:
     >>> r = LWE.estimate(schemes.Kyber512)
     bkw                  :: rop: ≈2^178.8, m: ≈2^166.8, mem: ≈2^167.8, b: 14, t1: 0, t2: 16, ℓ: 13, #cod: 448, #top: 0, #test: 64, tag: coded-bkw
     usvp                 :: rop: ≈2^143.8, red: ≈2^143.8, δ: 1.003941, β: 406, d: 998, tag: usvp
-    bdd                  :: rop: ≈2^140.2, red: ≈2^139.1, svp: ≈2^139.3, β: 389, η: 422, d: 1005, tag: bdd
-    dual                 :: rop: ≈2^149.9, mem: ≈2^97.1, m: 512, β: 424, d: 1024, ↻: 1, tag: dual
-    dual_hybrid          :: rop: ≈2^139.7, red: ≈2^139.5, guess: ≈2^135.9, β: 387, p: 5, ζ: 0, t: 50, β': 391, N: ≈2^81.1, m: 512
+    bdd                  :: rop: ≈2^140.3, red: ≈2^139.7, svp: ≈2^138.8, β: 391, η: 421, d: 1013, tag: bdd
+    dual                 :: rop: ≈2^149.9, mem: ≈2^97.1, β: 424, m: 512, d: 1024, tag: dual
+    dual_hybrid          :: rop: ≈2^139.7, red: ≈2^139.6, guess: ≈2^135.9, β: 387, p: 5, ζ: 0, t: 50, β': 391, N: ≈2^81.1, m: 512
 
   .. code-block:: python
 
@@ -58,10 +58,10 @@ Usage examples:
     SISParameters(n=1024, q=8380417, length_bound=350209, m=2304, norm=+Infinity, tag='Dilithium2_MSIS_WkUnf')
 
     >>> r = SIS.estimate.rough(schemes.Dilithium2_MSIS_WkUnf)
-    lattice  :: rop: ≈2^123.5, red: ≈2^123.5, sieve: ≈2^-332.2, β: 423, η: 423, ζ: 1, d: 2303, prob: 1, ↻: 1, tag: infinity
+    lattice  :: rop: ≈2^123.5, red: ≈2^123.5, sieve: ≈2^-332.2, β: 423, η: 423, ζ: 1, d: 2303, prob: 1, tag: infinity
 
     >>> r = SIS.estimate(schemes.Dilithium2_MSIS_WkUnf)
-    lattice  :: rop: ≈2^152.2, red: ≈2^151.3, sieve: ≈2^151.0, β: 427, η: 433, ζ: 0, d: 2304, prob: 1, ↻: 1, tag: infinity
+    lattice  :: rop: ≈2^152.2, red: ≈2^151.3, sieve: ≈2^151.1, β: 427, η: 433, ζ: 0, d: 2304, prob: 1, tag: infinity
 
   .. code-block:: python
 
@@ -73,9 +73,9 @@ Usage examples:
     usvp                 :: rop: ≈2^140.5, red: ≈2^140.5, δ: 1.003499, β: 481, d: 544, tag: usvp
    
     >>> r = NTRU.estimate(schemes.Falcon512_SKR)
-    usvp                 :: rop: ≈2^165.0, red: ≈2^165.0, δ: 1.003489, β: 483, d: 1020, tag: usvp
-    bdd                  :: rop: ≈2^160.6, red: ≈2^159.5, svp: ≈2^159.6, β: 463, η: 496, d: 1022, tag: bdd
-    bdd_hybrid           :: rop: ≈2^160.6, red: ≈2^159.5, svp: ≈2^159.6, β: 463, η: 496, ζ: 0, |S|: 1, d: 1024, prob: 1, ↻: 1, tag: hybrid
+    usvp                 :: rop: ≈2^165.1, red: ≈2^165.1, δ: 1.003489, β: 483, d: 1020, tag: usvp
+    bdd                  :: rop: ≈2^160.6, red: ≈2^159.6, svp: ≈2^159.6, β: 463, η: 496, d: 1022, tag: bdd
+    bdd_hybrid           :: rop: ≈2^160.6, red: ≈2^159.6, svp: ≈2^159.6, β: 463, η: 496, ζ: 0, |S|: 1, d: 1024, prob: 1, tag: hybrid
     bdd_mitm_hybrid      :: rop: ≈2^349.3, red: ≈2^349.3, svp: ≈2^204.8, β: 481, η: 2, ζ: 0, |S|: 1, d: 1024, prob: ≈2^-182.6, ↻: ≈2^184.8, tag: hybrid
 
     >>> schemes.Falcon512_Unf

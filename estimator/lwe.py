@@ -11,6 +11,9 @@ from .lwe_bkw import coded_bkw
 from .lwe_guess import exhaustive_search, mitm, distinguish, guess_composition  # noqa
 from .lwe_dual import dual
 from .lwe_dual import matzov as dual_hybrid
+from .lwe_comb import odlyzko, meet_rep0, meet_rep1
+from .lwe_primal_meet import primal_meet
+from .nd import SparseTernary
 from .gb import arora_gb  # noqa
 from .lwe_parameters import LWEParameters as Parameters  # noqa
 from .conf import (
@@ -117,12 +120,11 @@ class Estimate:
 
             >>> from estimator import *
             >>> _ = LWE.estimate(schemes.Kyber512)
-            bkw                  :: rop: ≈2^178.8, m: ≈2^166.8, mem: ≈2^167.8, b: 14, t1: 0, t2: 16, ℓ: 13, #cod: 448...
-            usvp                 :: rop: ≈2^143.8, red: ≈2^143.8, δ: 1.003941, β: 406, d: 998, tag: usvp
-            bdd                  :: rop: ≈2^140.2, red: ≈2^139.1, svp: ≈2^139.3, β: 389, η: 422, d: 1005, tag: bdd
-            dual                 :: rop: ≈2^149.9, mem: ≈2^97.1, m: 512, β: 424, d: 1024, ↻: 1, tag: dual
-            dual_hybrid          :: rop: ≈2^139.7, red: ≈2^139.5, guess: ≈2^135.9, β: 387, p: 5, ζ: 0, t: 50, β': 391...
-
+            bkw                  :: rop: ≈2^178.8, m: ≈2^166.8, mem: ≈2^167.8, b: 14, t1: 0, t2:...
+            usvp                 :: rop: ≈2^143.8, red: ≈2^143.8, δ: 1.003941, β: 406, d: 998, t...
+            bdd                  :: rop: ≈2^140.3, red: ≈2^139.7, svp: ≈2^138.8, β: 391, η: 421,...
+            dual                 :: rop: ≈2^149.9, mem: ≈2^97.1, β: 424, m: 512, d: 1024, tag: d...
+            dual_hybrid          :: rop: ≈2^139.7, red: ≈2^139.6, guess: ≈2^135.9, β: 387, p: 5,...
             >>> _ = LWE.estimate(schemes.Kyber512, quiet=True)
 
         """
@@ -133,6 +135,19 @@ class Estimate:
         algorithms["arora-gb"] = guess_composition(arora_gb)
         algorithms["bkw"] = coded_bkw
 
+        # Combinatorial Attack
+        if isinstance(params.Xs, SparseTernary) and params.Xe.is_bounded and params.Xs.mean == 0:
+            algorithms['odlyzko'] = partial(
+                odlyzko, red_cost_model=red_cost_model, red_shape_model=red_shape_model
+            )
+            algorithms['may_rep_0'] = partial(
+                meet_rep0, red_cost_model=red_cost_model, red_shape_model=red_shape_model
+            )
+            algorithms['may_rep_1'] = partial(
+                meet_rep1, red_cost_model=red_cost_model, red_shape_model=red_shape_model
+            )
+
+        # Primal Attacks
         algorithms["usvp"] = partial(
             primal_usvp, red_cost_model=red_cost_model, red_shape_model=red_shape_model
         )
@@ -154,6 +169,15 @@ class Estimate:
             red_cost_model=red_cost_model,
             red_shape_model=red_shape_model,
         )
+
+        if isinstance(params.Xs, SparseTernary) and params.Xs.m == params.Xs.p:
+            algorithms["primal_meet"] = partial(
+                primal_meet,
+                red_cost_model=red_cost_model,
+                red_shape_model=red_shape_model
+            )
+
+        # Dual Attacks
         algorithms["dual"] = partial(dual, red_cost_model=red_cost_model)
         algorithms["dual_hybrid"] = partial(dual_hybrid, red_cost_model=red_cost_model)
 

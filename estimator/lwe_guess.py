@@ -109,12 +109,9 @@ class guess_composition:
                 single_cost = f(params.updated(n=params.n - zeta), log_level=log_level + 1, **kwds)
                 if single_cost["rop"] == oo:
                     return Cost(rop=oo)
-                repeat, gamma, search_space, probability = cls.gammaf(params.n, h, zeta, base)
+                repeat, _, search_space, probability = cls.gammaf(params.n, h, zeta, base)
                 cost = single_cost.repeat(repeat)
-                cost["zeta"] = zeta
-                cost["|S|"] = search_space
-                cost["prop"] = probability
-                it.update(cost)
+                it.update(cost + {'zeta': zeta, '|S|': search_space, 'prob': probability})
             return it.y
 
     def __call__(self, params, log_level=5, **kwds):
@@ -128,12 +125,12 @@ class guess_composition:
             >>> from estimator import *
             >>> from estimator.lwe_guess import guess_composition
             >>> guess_composition(LWE.primal_usvp)(schemes.Kyber512.updated(Xs=ND.SparseTernary(16)))
-            rop: ≈2^102.1, red: ≈2^102.1, δ: 1.008011, β: 132, d: 461, tag: usvp, ↻: ≈2^34.9, ζ: 252, |S|: 1, ...
+            rop: ≈2^102.2, red: ≈2^102.2, δ: 1.008011, β: 132, d: 461, tag: usvp, ↻: ≈2^34.9, ζ:...
 
         Compare::
 
             >>> LWE.primal_hybrid(schemes.Kyber512.updated(Xs=ND.SparseTernary(16)))
-            rop: ≈2^85.5, red: ≈2^84.5, svp: ≈2^84.5, β: 105, η: 2, ζ: 364, |S|: ≈2^85.0, d: 316, prob: ≈2^-23.2, ↻:...
+            rop: ≈2^85.8, red: ≈2^84.8, svp: ≈2^84.8, β: 105, η: 2, ζ: 366, |S|: ≈2^85.1, d: 315...
 
         """
         params = LWEParameters.normalize(params)
@@ -201,8 +198,8 @@ class ExhaustiveSearch:
         # from [ia.cr/2020/515]
         cost = 2 * size * m_required
 
-        ret = Cost(rop=cost, mem=cost / 2, m=m_required)
-        return ret.sanity_check()
+        cost = Cost(rop=cost, mem=cost / 2, m=m_required)
+        return cost.sanity_check()
 
     __name__ = "exhaustive_search"
 
@@ -265,11 +262,11 @@ class MITM:
             )
 
         # since m = logT + loglogT and rop = T*m, we have rop=2^m
-        ret = Cost(rop=RR(2**m_required), mem=2**logT * m_required, m=m_required, k=ZZ(k))
+        cost = Cost(rop=RR(2**m_required), mem=2**logT * m_required, m=m_required, k=ZZ(k))
         repeat = prob_amplify(
             success_probability, sd_p**n * nd_p**m_required * success_probability_
         )
-        return ret.repeat(times=repeat)
+        return cost.repeat(repeat)
 
     def cost(
         self,
@@ -320,11 +317,11 @@ class MITM:
         # building the table costs 2*T*m using the generalization [ia.cr/2021/152] of
         # the recursive algorithm from [ia.cr/2020/515]
         cost_table = size_tab * 2 * m
+        mem_usage = size_tab * (k + m) + size_sea * (n - k + m)
 
-        ret = Cost(rop=(cost_table + cost_search), m=m, k=k)
-        ret["mem"] = size_tab * (k + m) + size_sea * (n - k + m)
+        cost = Cost(rop=(cost_table + cost_search), m=m, k=k, mem=mem_usage)
         repeat = prob_amplify(success_probability, sd_p**n * nd_p**m * success_probability_)
-        return ret.repeat(times=repeat)
+        return cost.repeat(repeat)
 
     def __call__(self, params: LWEParameters, success_probability=0.99, optimization=mitm_opt):
         """
@@ -349,9 +346,9 @@ class MITM:
             >>> from estimator.lwe_guess import mitm
             >>> params = LWE.Parameters(n=64, q=2**40, Xs=ND.Binary, Xe=ND.DiscreteGaussian(3.2))
             >>> mitm(params)
-            rop: ≈2^37.0, mem: ≈2^37.2, m: 37, k: 32, ↻: 1
+            rop: ≈2^37.0, mem: ≈2^37.2, m: 37, k: 32
             >>> mitm(params, optimization="numerical")
-            rop: ≈2^39.2, m: 36, k: 32, mem: ≈2^39.1, ↻: 1
+            rop: ≈2^39.2, m: 36, k: 32, mem: ≈2^39.1
             >>> params = LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseTernary(32), Xe=ND.DiscreteGaussian(3.2))
             >>> mitm(params)
             rop: ≈2^217.8, mem: ≈2^210.2, m: ≈2^15.5, k: 512, ↻: 226
@@ -359,7 +356,7 @@ class MITM:
             rop: ≈2^215.6, m: ≈2^15.5, k: 512, mem: ≈2^208.6, ↻: 226
 
         """
-        Cost.register_impermanent(rop=True, mem=False, m=True, k=False)
+        Cost.register_impermanent(m=True, k=False)
 
         params = LWEParameters.normalize(params)
 
@@ -375,11 +372,11 @@ class MITM:
                 for k in it:
                     cost = self.cost(k=k, params=params, success_probability=success_probability)
                     it.update(cost)
-                ret = it.y
+                cost = it.y
                 # if the noise is large, the curve might not be convex, so the above minimum
                 # is not correct. Interestingly, in these cases, it seems that k=1 might be smallest
-                ret1 = self.cost(k=1, params=params, success_probability=success_probability)
-                return min(ret, ret1)
+                cost1 = self.cost(k=1, params=params, success_probability=success_probability)
+                return min(cost, cost1)
         else:
             raise ValueError("Unknown optimization method for MITM.")
 

@@ -6,7 +6,6 @@ See :ref:`LWE Primal Attacks` for an introduction what is available.
 
 """
 from functools import partial
-
 from sage.all import oo, ceil, sqrt, log, RR, ZZ, binomial, cached_function
 from .reduction import delta as deltaf
 from .reduction import cost as costf
@@ -21,6 +20,7 @@ from .prob import mitm_babai_probability
 from .io import Logging
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
+from .conf import red_simulator as red_simulator_default
 
 
 class PrimalUSVP:
@@ -402,6 +402,98 @@ class PrimalHybrid:
 
     @staticmethod
     @cached_function
+    def cost_precise(
+        params: LWEParameters,
+        beta: int,
+        zeta: int,
+        h_: int,
+        babai=False,
+        mitm=False,
+        simulator=red_simulator_default,
+        red_cost_model=red_cost_model_default,
+        log_level=5,
+    ):
+        """
+        Cost of the hybrid attack, more precisely with the "optimal" xi,
+        and assume the guess is of only one weight.
+        """
+        assert zeta != 0
+
+        # Remaining problem
+        subparams = params.updated(n=params.n - zeta)
+        guess = None
+        if params.Xs.is_sparse:
+            guess, subparams.Xs = params.Xs.split_balanced(zeta, h_)
+
+        # 1. Simulate BKZ-β
+        xi = PrimalUSVP._xi_factor(subparams.Xs, params.Xe)
+        # xi2 = PrimalUSVP._xi_factor(params.Xs, params.Xe)
+        # print(f"Difference between xi values: {xi:.3f} vs {xi2:.3f}")
+
+        tau = False if params._homogeneous else params.Xe.stddev
+        m = min(params.m, ceil(sqrt(subparams.n * log(params.q) / log(deltaf(beta)))) - subparams.n)
+        d = max(beta, m + subparams.n + (0 if params._homogeneous else 1))
+
+        r = simulator(d, subparams.n, params.q, beta, xi=xi, tau=tau, dual=True)
+        bkz_cost = costf(red_cost_model, beta, d)
+
+        # 2. Required SVP dimension η
+        if babai:
+            eta = 2
+            svp_cost = PrimalHybrid.babai_cost(d)
+        else:
+            # we scaled the lattice so that χ_e is what we want
+            eta = PrimalHybrid.svp_dimension(r, params.Xe)
+            # r2 = simulator(d, subparams.n, params.q, beta, xi=xi2, tau=tau, dual=True)
+            # print(f"Alternative eta: {PrimalHybrid.svp_dimension(r2, params.Xe)}")
+
+            if eta > d:
+                # Lattice reduction was not strong enough to "reveal" the LWE solution.
+                # A larger `beta` should perhaps be attempted.
+                return Cost(rop=oo)
+            svp_cost = costf(red_cost_model, eta, eta)
+            # when η ≪ β, lifting may be a bigger cost
+            svp_cost["rop"] += PrimalHybrid.babai_cost(d - eta)["rop"]
+
+        # 3. Search
+        # We need to do one BDD call at least
+        num_guesses, p_hw = 0, RR(0.0)
+
+        # TODO: this is rather clumsy as a model
+        ssf = (lambda x: RR(x**.5)) if mitm else (lambda x: x)  # search space size
+
+        if params.Xs.is_sparse:
+            num_guesses = guess.support_size()
+            # p_hw = sum(RR(params.Xs.split_probability(zeta, hw)) for hw in range(h_ + 1))
+            # p_hw = sum(RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=hw)) for hw in range(h_+1))
+            p_hw = RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=h_))
+            svp_cost = svp_cost.repeat(ssf(num_guesses))
+        else:
+            base = params.Xs.bounds[1] - params.Xs.bounds[0]  # e.g. (-1, 1) -> two nonzero values
+            num_guesses = binomial(zeta, h_) * base**h_
+            p_hw = RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=h_))
+            svp_cost = svp_cost.repeat(ssf(num_guesses))
+
+        if mitm:
+            assert babai is True  # TODO: analyze probability when not using Babai NP.
+            p_hw *= mitm_babai_probability(r, params.Xe.stddev)
+
+        p = p_hw  # RR(p_hw * prob_babai(r, sqrt(d) * params.Xe.stddev))
+
+        cost = Cost({
+            "rop": bkz_cost["rop"] + svp_cost["rop"],
+            "red": bkz_cost["rop"], "svp": svp_cost["rop"],
+            "beta": beta, "eta": eta, "zeta": zeta, "|S|": num_guesses, "d": d,
+            "prob": p, "h_": h_,
+        })
+
+        if not p or RR(p).is_NaN():
+            return Cost(rop=oo)
+        # 4. Repeat whole experiment ~1/prob times
+        return cost.repeat(prob_amplify(0.99, p))
+
+    @staticmethod
+    @cached_function
     def cost(
         beta: int,
         params: LWEParameters,
@@ -430,6 +522,19 @@ class PrimalHybrid:
 
         """
         simulator = simulator_normalize(red_shape_model)
+
+        if params.Xs.is_sparse and zeta > 0:
+            best_cost, hw = Cost(rop=oo), 0
+            while hw <= min(params.Xs.hamming_weight, zeta):
+                cost = PrimalHybrid.cost_precise(
+                    params, beta, zeta, hw, babai, mitm, simulator, red_cost_model, log_level
+                )
+                if cost > best_cost:
+                    break
+                best_cost = cost
+                hw += 1
+            return best_cost
+
         if d is None:
             delta = deltaf(beta)
             d = min(ceil(sqrt(params.n * log(params.q) / log(delta))), m)
@@ -495,14 +600,14 @@ class PrimalHybrid:
             h = params.Xs.hamming_weight
             probability = RR(prob_drop(params.n, h, zeta))
             hw = 1
-            while hw < min(h, zeta):
+            while hw <= min(h, zeta):
                 new_search_space = binomial(zeta, hw) * base**hw
                 if svp_cost.repeat(ssf(search_space + new_search_space))["rop"] >= bkz_cost["rop"]:
                     break
                 search_space += new_search_space
                 probability += prob_drop(params.n, h, zeta, fail=hw)
                 hw += 1
-
+            hw -= 1
             svp_cost = svp_cost.repeat(ssf(search_space))
 
         if mitm and zeta > 0:
@@ -519,36 +624,19 @@ class PrimalHybrid:
                 r = simulator(d, params.n - zeta, params.q, beta, xi=xi, tau=False, dual=True)
             probability *= RR(prob_babai(r, sqrt(d) * params.Xe.stddev))
 
-        ret = Cost()
-        ret["rop"] = bkz_cost["rop"] + svp_cost["rop"]
-        ret["red"] = bkz_cost["rop"]
-        ret["svp"] = svp_cost["rop"]
-        ret["beta"] = beta
-        ret["eta"] = eta
-        ret["zeta"] = zeta
-        ret["|S|"] = search_space
-        ret["d"] = d
-        ret["prob"] = probability
+        cost = Cost({
+            "rop": bkz_cost["rop"] + svp_cost["rop"],
+            "red": bkz_cost["rop"], "svp": svp_cost["rop"],
+            "beta": beta, "eta": eta, "zeta": zeta, "|S|": search_space, "d": d,
+            "prob": probability,
+        })
+        if zeta:
+            cost["h_"] = hw
 
-        ret.register_impermanent(
-            {"|S|": False},
-            rop=True,
-            red=True,
-            svp=True,
-            eta=False,
-            zeta=False,
-            prob=False,
-        )
-
-        # 4. Repeat whole experiment ~1/prob times
-        if probability and not RR(probability).is_NaN():
-            ret = ret.repeat(
-                prob_amplify(0.99, probability),
-            )
-        else:
+        if not probability or RR(probability).is_NaN():
             return Cost(rop=oo)
-
-        return ret
+        # 4. Repeat whole experiment ~1/prob times
+        return cost.repeat(prob_amplify(0.99, probability))
 
     @classmethod
     def cost_zeta(
@@ -604,7 +692,11 @@ class PrimalHybrid:
         Logging.log("bdd", log_level, f"H1: {cost!r}")
 
         # step 2. optimize d
-        if cost and cost.get("tag", "XXX") != "usvp" and optimize_d:
+        if (
+            cost and optimize_d
+            and cost.get("tag", "XXX") != "usvp"
+            and params.n < cost["d"] + cost["zeta"] + 1
+        ):
             with local_minimum(
                 params.n, cost["d"] + cost["zeta"] + 1, log_level=log_level + 1
             ) as it:
@@ -661,16 +753,16 @@ class PrimalHybrid:
             >>> from estimator import *
             >>> params = schemes.Kyber512.updated(Xs=ND.SparseTernary(16))
             >>> LWE.primal_hybrid(params, mitm=False, babai=False)
-            rop: ≈2^89.3, red: ≈2^88.8, svp: ≈2^87.7, β: 106, η: 18, ζ: 321, |S|: ≈2^39.7, d: 360, prob: ≈2^-26.9, ↻...
+            rop: ≈2^91.5, red: ≈2^90.7, svp: ≈2^90.2, β: 178, η: 21, ζ: 256, |S|: ≈2^56.6, d: 53...
 
             >>> LWE.primal_hybrid(params, mitm=False, babai=True)
-            rop: ≈2^88.4, red: ≈2^87.8, svp: ≈2^86.9, β: 98, η: 2, ζ: 321, |S|: ≈2^39.7, d: 347, prob: ≈2^-28.1, ↻...
+            rop: ≈2^88.7, red: ≈2^88.0, svp: ≈2^87.2, β: 98, η: 2, ζ: 323, |S|: ≈2^39.7, d: 346,...
 
             >>> LWE.primal_hybrid(params, mitm=True, babai=False)
-            rop: ≈2^73.4, red: ≈2^72.5, svp: ≈2^72.3, β: 109, η: 15, ζ: 320, |S|: ≈2^82.8, d: 366, prob: 0.001, ↻...
+            rop: ≈2^74.1, red: ≈2^73.7, svp: ≈2^71.9, β: 104, η: 16, ζ: 320, |S|: ≈2^77.1, d: 35...
 
             >>> LWE.primal_hybrid(params, mitm=True, babai=True)
-            rop: ≈2^85.5, red: ≈2^84.5, svp: ≈2^84.5, β: 105, η: 2, ζ: 364, |S|: ≈2^85.0, d: 316, prob: ≈2^-23.2, ↻...
+            rop: ≈2^85.8, red: ≈2^84.8, svp: ≈2^84.8, β: 105, η: 2, ζ: 366, |S|: ≈2^85.1, d: 315...
 
         TESTS:
 
