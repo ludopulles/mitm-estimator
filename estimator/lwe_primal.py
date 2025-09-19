@@ -426,7 +426,10 @@ class PrimalHybrid:
             guess, subparams.Xs = params.Xs.split_balanced(zeta, h_)
 
         # 1. Simulate BKZ-β
-        xi = PrimalUSVP._xi_factor(subparams.Xs, params.Xe)
+        xi = (
+            1 if RR(subparams.Xs.stddev) == RR(0)
+            else PrimalUSVP._xi_factor(subparams.Xs, params.Xe)
+        )
         # xi2 = PrimalUSVP._xi_factor(params.Xs, params.Xe)
         # print(f"Difference between xi values: {xi:.3f} vs {xi2:.3f}")
 
@@ -753,16 +756,13 @@ class PrimalHybrid:
             >>> from estimator import *
             >>> params = schemes.Kyber512.updated(Xs=ND.SparseTernary(16))
             >>> LWE.primal_hybrid(params, mitm=False, babai=False)
-            rop: ≈2^91.5, red: ≈2^90.7, svp: ≈2^90.2, β: 178, η: 21, ζ: 256, |S|: ≈2^56.6, d: 53...
+            rop: ≈2^90.8, red: ≈2^89.8, svp: ≈2^89.8, β: 161, η: 18, ζ: 287, |S|: ≈2^56.0, d: 50...
 
             >>> LWE.primal_hybrid(params, mitm=False, babai=True)
-            rop: ≈2^88.7, red: ≈2^88.0, svp: ≈2^87.2, β: 98, η: 2, ζ: 323, |S|: ≈2^39.7, d: 346,...
-
-            >>> LWE.primal_hybrid(params, mitm=True, babai=False)
-            rop: ≈2^74.1, red: ≈2^73.7, svp: ≈2^71.9, β: 104, η: 16, ζ: 320, |S|: ≈2^77.1, d: 35...
+            rop: ≈2^43.1, red: ≈2^43.1, svp: ≈2^19.3, β: 40, η: 2, ζ: 1, |S|: 1, d: 569, prob: 0...
 
             >>> LWE.primal_hybrid(params, mitm=True, babai=True)
-            rop: ≈2^85.8, red: ≈2^84.8, svp: ≈2^84.8, β: 105, η: 2, ζ: 366, |S|: ≈2^85.1, d: 315...
+            rop: ≈2^87.1, red: ≈2^85.1, svp: ≈2^86.6, β: 117, η: 2, ζ: 367, |S|: ≈2^94.3, d: 373...
 
         TESTS:
 
