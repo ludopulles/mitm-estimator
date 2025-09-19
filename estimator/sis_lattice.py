@@ -104,6 +104,8 @@ class SISLattice:
             it merely reports costs.
 
         """
+        Cost.register_impermanent(sieve=True)
+
         if params.length_bound >= (params.q - 1) / 2:
             raise ValueError("SIS trivially easy. Please set norm bound < (q-1)/2.")
 
@@ -138,7 +140,7 @@ class SISLattice:
                 idx_start = 0
 
             if abs(r[-1] - 1) < 1e-8:  # 1-vectors exist
-                # Find first 1 length graham-schmidt vector in r (Zone III)
+                # Find first 1 length Gram--Schmidt vector in r (Zone III)
                 idx_end = next((i - 1 for i, r_ in enumerate(r) if sqrt(r_) <= 1 + 1e-8), d_ - 1)
 
             else:
@@ -156,33 +158,17 @@ class SISLattice:
         probability = 2 ** min(
             0, log_trial_prob + RR(log(N, 2))
         )  # expected number of solutions (max 1)
-        ret = Cost()
-        ret["rop"] = cost_red
-        ret["red"] = bkz_cost["rop"]
-        ret["sieve"] = max(cost_red - bkz_cost["rop"], 1e-100)  # Ensuring non-zero cost here
-        ret["beta"] = beta
-        ret["eta"] = sieve_dim
-        ret["zeta"] = zeta
-        ret["d"] = d_
-        ret["prob"] = probability
 
-        ret.register_impermanent(
-            rop=True,
-            red=True,
-            sieve=True,
-            eta=False,
-            zeta=False,
-            prob=False,
+        cost = Cost(
+            rop=cost_red, red=bkz_cost["rop"],
+            sieve=max(cost_red - bkz_cost["rop"], 1e-100),  # Ensuring non-zero cost here
+            beta=beta, eta=sieve_dim, zeta=zeta, d=d_, prob=probability,
         )
-        # 4. Repeat whole experiment ~1/prob times
-        if probability and not RR(probability).is_NaN():
-            ret = ret.repeat(
-                prob_amplify(success_probability, probability),
-            )
-        else:
-            return Cost(rop=oo)
 
-        return ret
+        if not probability or RR(probability).is_NaN():
+            return Cost(rop=oo)
+        # 4. Repeat whole experiment ~1/prob times
+        return cost.repeat(prob_amplify(0.99, probability))
 
     @classmethod
     def cost_zeta(
@@ -276,23 +262,23 @@ class SISLattice:
 
             >>> from estimator import *
             >>> SIS.lattice(schemes.Dilithium2_MSIS_WkUnf)
-            rop: ≈2^152.2, red: ≈2^151.3, sieve: ≈2^151.0, β: 427, η: 433, ζ: 0, d: 2304, prob: 1, ↻: 1, tag: infinity
+            rop: ≈2^152.2, red: ≈2^151.3, sieve: ≈2^151.0, β: 427, η: 433, ζ: 0, d: 2304, prob: 1, tag: infinity
 
             >>> SIS.lattice(schemes.Dilithium2_MSIS_WkUnf, red_shape_model="lgsa")
-            rop: ≈2^151.2, red: ≈2^150.2, sieve: ≈2^150.2, β: 423, η: 430, ζ: 0, d: 2304, prob: 1, ↻: 1, tag: infinity
+            rop: ≈2^151.2, red: ≈2^150.2, sieve: ≈2^150.2, β: 423, η: 430, ζ: 0, d: 2304, prob: 1, tag: infinity
 
             >>> params = SIS.Parameters(n=113, q=2048, length_bound=512, norm=2)
             >>> SIS.lattice(params)
             rop: ≈2^47.0, red: ≈2^47.0, δ: 1.011391, β: 61, d: 276, tag: euclidean
 
             >>> SIS.lattice(params.updated(norm=oo, length_bound=16), red_shape_model="lgsa")
-            rop: ≈2^61.0, red: ≈2^59.9, sieve: ≈2^60.1, β: 95, η: 126, ζ: 0, d: 2486, prob: 1, ↻: 1, tag: infinity
+            rop: ≈2^61.0, red: ≈2^59.9, sieve: ≈2^60.1, β: 95, η: 126, ζ: 0, d: 2486, prob: 1, tag: infinity
 
             >>> SIS.lattice(params.updated(norm=oo, length_bound=16), red_shape_model="cn11")
-            rop: ≈2^65.8, red: ≈2^64.8, sieve: ≈2^64.9, β: 113, η: 142, ζ: 0, d: 2486, prob: 1, ↻: 1, tag: infinity
+            rop: ≈2^65.8, red: ≈2^64.8, sieve: ≈2^64.9, β: 113, η: 142, ζ: 0, d: 2486, prob: 1, tag: infinity
 
             >>> SIS.lattice(params.updated(norm=oo, length_bound=1), red_shape_model="cn11")
-            rop: ≈2^246.2, red: ≈2^245.1, sieve: ≈2^245.2, β: 764, η: 751, ζ: 0, d: 2486, prob: 1, ↻: 1, tag: infinity
+            rop: ≈2^246.2, red: ≈2^245.1, sieve: ≈2^245.2, β: 764, η: 751, ζ: 0, d: 2486, prob: 1, tag: infinity
 
         The success condition for euclidean norm bound is derived by determining the root hermite factor required for
         BKZ to produce the required output. For infinity norm bounds, the success conditions are derived using a

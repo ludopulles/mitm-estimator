@@ -16,10 +16,26 @@ class Cost(UserDict):
     # scaled.
 
     impermanents = {
-        "rop": True,
-        "repetitions": False,
-        "tag": False,
-        "problem": False,
+        # Timing related:
+        "rop": True,  # number of ring operations
+        "red": True,  # rop's spent on lattice reduction
+        "svp": True,  # rop's spent to solve SVP
+
+        # General properties:
+        "prob": False,  # success probability
+        "repetitions": False,  # number of repetitions required to boost success probability
+        "tag": False,  # name of the attack
+        "problem": False,  # targeted LWE parameters
+        "mem": False,  # memory usage
+
+        # Specific attack parameters:
+        "zeta": False,  # guessing dimension
+        "d": False,  # projected dimension, after ignoring initial part of basis
+        "beta": False,  # Block size for BKZ
+        "delta": False,  # n-th root Hermite factor, a lattice reduction quality measure
+        "|S|": False,  # Search space (size)
+        "eta": False,  # dimension of Babai nearest plane (see lwe_primal.py)
+        "h_": False,  # guessed hamming weight of guessing part of a sparse secret
     }
 
     @staticmethod
@@ -42,15 +58,19 @@ class Cost(UserDict):
     key_map = {
         "delta": "δ",
         "beta": "β",
-        "beta_": "β'",
         "eta": "η",
-        "eta_": "η'",
         "epsilon": "ε",
         "zeta": "ζ",
-        "zeta_": "ζ'",
         "ell": "ℓ",
-        "ell_": "ℓ'",
         "repetitions": "↻",
+    }
+
+    # Note: these are in the range of U+2080 - U+208E.
+    # Superscripts are found in U+00B2, U+00B3, U+00B9, and U+2070 - U+207F.
+    key_sub_map = {
+        "": "'",
+        "0": "₀", "1": "₁", "2": "₂", "3": "₃", "4": "₄",
+        "5": "₅", "6": "₆", "7": "₇", "8": "₈", "9": "₉",
     }
 
     val_map = {"beta": "%8d", "beta_": "%8d", "d": "%8d", "delta": "%8.6f"}
@@ -71,9 +91,14 @@ class Cost(UserDict):
             δ: 5.000000, bar: 2
 
         """
+        def format_key(key):
+            if key.find("_") >= 0:
+                key, sub = key.split("_")
+                return self.key_map.get(key, key) + self.key_sub_map.get(sub, "_" + sub)
+            return self.key_map.get(key, key)
 
         def value_str(k, v):
-            kstr = self.key_map.get(k, k)
+            kstr = format_key(k)
             kk = f"{kstr:>{keyword_width}}"
             try:
                 if (1 / round_bound < abs(v) < round_bound) or (not v) or (k in self.val_map):
@@ -126,13 +151,12 @@ class Cost(UserDict):
         r = {k: self[k] for k in keys if k in self.keys()}
         return Cost(**r)
 
-    def repeat(self, times, select=None):
+    def repeat(self, times):
         """
         Return a report with all costs multiplied by ``times``.
 
-        :param times:  the number of times it should be run
-        :param select: toggle which fields ought to be repeated and which should not
-        :returns:      a new cost estimate
+        :param times: the number of times it should be run
+        :return: a new cost estimate
 
         EXAMPLE::
 
@@ -149,51 +173,56 @@ class Cost(UserDict):
             rop: ≈2^19.9, ↻: ≈2^19.9
 
         """
-        impermanents = dict(self.impermanents)
-
-        if select is not None:
-            impermanents.update(select)
+        if times == 1:
+            return self
 
         try:
-            ret = {k: times * v if impermanents[k] else v for k, v in self.items()}
-            ret["repetitions"] = times * ret.get("repetitions", 1)
-            return Cost(**ret)
+            new_cost = {k: times * v if self.impermanents[k] else v for k, v in self.items()}
+            new_cost["repetitions"] = times * new_cost.get("repetitions", 1)
+            return Cost(**new_cost)
         except KeyError as error:
             raise NotImplementedError(
                 f"You found a bug, this function does not know about about a key but should: {error}"
-            )
+            ) from error
 
     def __rmul__(self, times):
         return self.repeat(times)
 
-    def combine(self, right, base=None):
-        """Combine ``left`` and ``right``.
+    def combine(self, right):
+        """Combine ``self`` and ``right`` into one cost.
 
-        :param left: cost dictionary
+        :param self: this cost dictionary
         :param right: cost dictionary
-        :param base: add entries to ``base``
 
         EXAMPLE::
 
             >>> from estimator.cost import Cost
-            >>> c0 = Cost(a=1)
-            >>> c1 = Cost(b=2)
-            >>> c2 = Cost(c=3)
+            >>> c0, c1, c2 = Cost(a=1), Cost(b=2), Cost(c=3)
             >>> c0.combine(c1)
             a: 1, b: 2
-            >>> c0.combine(c1, base=c2)
+            >>> c2.combine(c0).combine(c1)
             c: 3, a: 1, b: 2
 
         """
-        base_dict = {} if base is None else base
-        cost = {**base_dict, **self, **right}
-        return Cost(**cost)
+        return Cost(**self, **right)
 
     def __bool__(self):
         return self.get("rop", oo) < oo
 
     def __add__(self, other):
-        return self.combine(self, other)
+        """
+        Return the combination of this cost and cost of ``other``.
+
+        EXAMPLE::
+
+            >>> from estimator.cost import Cost
+            >>> c0, c1, c2 = Cost(a=1), Cost(b=2), Cost(c=3)
+            >>> c1 += c0
+            >>> c2 + c1
+            c: 3, b: 2, a: 1
+
+        """
+        return self.combine(other)
 
     def __repr__(self):
         return self.str(compact=True)

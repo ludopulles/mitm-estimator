@@ -72,11 +72,11 @@ class NTRUParameters(LWEParameters):
 
             >>> from estimator import *
             >>> schemes.NTRUHPS2048509Enc
-            NTRUParameters(n=508, q=2048, Xs=D(σ=0.82), Xe=T(p=127, m=127, n=508), m=508, ...
+            NTRUParameters(n=508, q=2048, Xs=D(σ=0.82), Xe=T(hw=254, ones=127, n=508), m=508, ...
             >>> schemes.NTRUHPS2048509Enc.possibly_overstretched
             False
             >>> schemes.NTRUHPS2048509Enc.updated(q=16536)
-            NTRUParameters(n=508, q=16536, Xs=D(σ=0.82), Xe=T(p=127, m=127, n=508), m=508, ...
+            NTRUParameters(n=508, q=16536, Xs=D(σ=0.82), Xe=T(hw=254, ones=127, n=508), m=508, ...
             >>> schemes.NTRUHPS2048509Enc.updated(q=16536).possibly_overstretched
             True
         """

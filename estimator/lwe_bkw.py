@@ -100,15 +100,11 @@ class CodedBKW:
         :param ntest: Number of coordinates to hypothesis test.
 
         """
-        cost = Cost()
-
         # Our cost is mainly determined by q^b, on the other hand there are expressions in q^(ℓ+1)
         # below, hence, we set ℓ = b - 1. This allows to achieve the performance reported in
         # [C:GuoJohSta15].
 
-        cost["b"] = b
         ell = b - 1
-        cost["ell"] = ell
 
         secret_bounds = params.Xs.bounds
         if params.Xs.is_Gaussian_like and params.Xs.mean == 0:
@@ -123,11 +119,6 @@ class CodedBKW:
         t1 = CodedBKW.t1(params, ell, t2, b, ntest)
         t2 -= t1
 
-        cost["t1"] = t1
-        cost["t2"] = t2
-
-        cost.register_impermanent(t1=False, t2=False)
-
         # compute ntest with the t1 just computed
         if ntest is None:
             ntest = CodedBKW.ntest(params.n, ell, t1, t2, b, params.q)
@@ -141,11 +132,13 @@ class CodedBKW:
 
         ntot = ncod + ntest
         ntop = max(params.n - ncod - ntest - t1 * b, 0)
-        cost["#cod"] = ncod  # coding step
-        cost["#top"] = ntop  # guessing step, typically zero
-        cost["#test"] = ntest  # hypothesis testing
 
-        cost.register_impermanent({"#cod": False, "#top": False, "#test": False})
+        cost = Cost({
+            "b": b, "ell": ell, "t1": t1, "t2": t2,
+            "#cod": ncod,  # coding step
+            "#top": ntop,  # guessing step, typically zero
+            "#test": ntest  # hypothesis testing
+        })
 
         # Theorem 1: quantization noise + addition noise
         coding_variance = params.Xs.stddev**2 * sigma_set**2 * ntot
@@ -158,7 +151,6 @@ class CodedBKW:
             return cost
         m = (t1 + t2) * ZZ(params.q**b - 1) / 2 + M
         cost["m"] = float(m)
-        cost.register_impermanent(m=True)
 
         if not params.Xs <= params.Xe:
             # Equation (7)

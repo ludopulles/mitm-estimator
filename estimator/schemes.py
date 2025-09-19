@@ -1,6 +1,6 @@
 from sage.all import oo
 from .nd import stddevf, Binary, CenteredBinomial, DiscreteGaussian, SparseTernary, UniformMod
-from .lwe_parameters import LWEParameters
+from .lwe_parameters import LWEParameters, ModuleLWEParameters, RingLWEParameters
 from .ntru_parameters import NTRUParameters
 from .sis_parameters import SISParameters
 
@@ -16,8 +16,8 @@ from .sis_parameters import SISParameters
 # https://eprint.iacr.org/2020/1308.pdf
 # Table 2, page 27, disagrees on Kyber 512
 
-Kyber512 = LWEParameters(
-    n=2 * 256,
+Kyber512 = ModuleLWEParameters(
+    ringdeg=256, rank=2,
     q=3329,
     Xs=CenteredBinomial(3),
     Xe=CenteredBinomial(3),
@@ -25,8 +25,8 @@ Kyber512 = LWEParameters(
     tag="Kyber 512",
 )
 
-Kyber768 = LWEParameters(
-    n=3 * 256,
+Kyber768 = ModuleLWEParameters(
+    ringdeg=256, rank=3,
     q=3329,
     Xs=CenteredBinomial(2),
     Xe=CenteredBinomial(2),
@@ -34,8 +34,8 @@ Kyber768 = LWEParameters(
     tag="Kyber 768",
 )
 
-Kyber1024 = LWEParameters(
-    n=4 * 256,
+Kyber1024 = ModuleLWEParameters(
+    ringdeg=256, rank=4,
     q=3329,
     Xs=CenteredBinomial(2),
     Xe=CenteredBinomial(2),
@@ -53,8 +53,8 @@ Kyber1024 = LWEParameters(
 # https://eprint.iacr.org/2020/1308.pdf
 # Table 2, page 27, agrees
 
-LightSaber = LWEParameters(
-    n=2 * 256,
+LightSaber = ModuleLWEParameters(
+    ringdeg=256, rank=2,
     q=8192,
     Xs=CenteredBinomial(5),
     Xe=UniformMod(8),
@@ -62,8 +62,8 @@ LightSaber = LWEParameters(
     tag="LightSaber",
 )
 
-Saber = LWEParameters(
-    n=3 * 256,
+Saber = ModuleLWEParameters(
+    ringdeg=256, rank=3,
     q=8192,
     Xs=CenteredBinomial(4),
     Xe=UniformMod(8),
@@ -71,8 +71,8 @@ Saber = LWEParameters(
     tag="Saber",
 )
 
-FireSaber = LWEParameters(
-    n=4 * 256,
+FireSaber = ModuleLWEParameters(
+    ringdeg=256, rank=4,
     q=8192,
     Xs=CenteredBinomial(3),
     Xe=UniformMod(8),
@@ -84,12 +84,14 @@ FireSaber = LWEParameters(
 # NTRU
 #
 #
+# For the error distribution, see Section 1.3 from https://www.ntru.org/f/ntru-20190330.pdf,
+# and Definition 15 in Section 1.2
 
 NTRUHPS2048509Enc = NTRUParameters(
     n=508,
     q=2048,
-    Xe=SparseTernary(2048 / 16 - 1),
     Xs=UniformMod(3),
+    Xe=SparseTernary(2048 / 8 - 2, 2048 / 16 - 1),
     m=508,
     tag="NTRUHPS2048509Enc",
 )
@@ -98,7 +100,7 @@ NTRUHPS2048677Enc = NTRUParameters(
     n=676,
     q=2048,
     Xs=UniformMod(3),
-    Xe=SparseTernary(2048 / 16 - 1),
+    Xe=SparseTernary(2048 / 8 - 2, 2048 / 16 - 1),
     m=676,
     tag="NTRUHPS2048677Enc",
 )
@@ -107,7 +109,7 @@ NTRUHPS4096821Enc = NTRUParameters(
     n=820,
     q=4096,
     Xs=UniformMod(3),
-    Xe=SparseTernary(4096 / 16 - 1),
+    Xe=SparseTernary(4096 / 8 - 2, 4096 / 16 - 1),
     m=820,
     tag="NTRUHPS4096821Enc",
 )
@@ -272,7 +274,7 @@ Frodo1344 = LWEParameters(
 
 # HES v1.1
 
-HESv111024128error = LWEParameters(
+HESv111024128error = RingLWEParameters(
     n=1024,
     q=2**27,
     Xs=DiscreteGaussian(3.0),
@@ -281,7 +283,7 @@ HESv111024128error = LWEParameters(
     tag="HESv11error",
 )
 
-HESv111024128ternary = LWEParameters(
+HESv111024128ternary = RingLWEParameters(
     n=1024,
     q=2**27,
     Xs=UniformMod(3),
@@ -306,7 +308,7 @@ TFHE630 = LWEParameters(
     tag="TFHE630",
 )
 # - Bootstrapping key (Ring-LWE)
-TFHE1024 = LWEParameters(
+TFHE1024 = RingLWEParameters(
     n=1024,
     q=2**32,
     Xs=Binary,
@@ -327,7 +329,7 @@ Concrete_TFHE586 = LWEParameters(
     tag="Concrete_TFHE586",
 )
 # - Bootstrapping key (Ring-LWE)
-Concrete_TFHE512 = LWEParameters(
+Concrete_TFHE512 = RingLWEParameters(
     n=512,
     q=2**32,
     Xs=Binary,
@@ -346,7 +348,7 @@ TFHE16_500 = LWEParameters(
     tag="TFHE16_500",
 )
 
-TFHE16_1024 = LWEParameters(
+TFHE16_1024 = RingLWEParameters(
     n=1024,
     q=2**32,
     Xs=Binary,
@@ -364,7 +366,7 @@ TFHE20_612 = LWEParameters(
     tag="TFHE20_612",
 )
 
-TFHE20_1024 = LWEParameters(
+TFHE20_1024 = RingLWEParameters(
     n=1024,
     q=2**32,
     Xs=Binary,
@@ -390,7 +392,7 @@ FHEW = LWEParameters(
 # https://www.microsoft.com/en-us/research/wp-content/uploads/2016/09/sealmanual.pdf
 # Table 3, page 19
 
-SEAL20_1024 = LWEParameters(
+SEAL20_1024 = RingLWEParameters(
     n=1024,
     q=2**48 - 2**20 + 1,
     Xs=UniformMod(3),
@@ -398,7 +400,7 @@ SEAL20_1024 = LWEParameters(
     tag="SEAL20_1024",
 )
 
-SEAL20_2048 = LWEParameters(
+SEAL20_2048 = RingLWEParameters(
     n=2048,
     q=2**94 - 2**20 + 1,
     Xs=UniformMod(3),
@@ -406,7 +408,7 @@ SEAL20_2048 = LWEParameters(
     tag="SEAL20_2048",
 )
 
-SEAL20_4096 = LWEParameters(
+SEAL20_4096 = RingLWEParameters(
     n=4096,
     q=2**190 - 2**30 + 1,
     Xs=UniformMod(3),
@@ -414,7 +416,7 @@ SEAL20_4096 = LWEParameters(
     tag="SEAL20_4096",
 )
 
-SEAL20_8192 = LWEParameters(
+SEAL20_8192 = RingLWEParameters(
     n=8192,
     q=2**383 - 2**33 + 1,
     Xs=UniformMod(3),
@@ -422,7 +424,7 @@ SEAL20_8192 = LWEParameters(
     tag="SEAL20_8192",
 )
 
-SEAL20_16384 = LWEParameters(
+SEAL20_16384 = RingLWEParameters(
     n=16384,
     q=2**767 - 2**56 + 1,
     Xs=UniformMod(3),
@@ -434,7 +436,7 @@ SEAL20_16384 = LWEParameters(
 # https://www.microsoft.com/en-us/research/wp-content/uploads/2017/06/sealmanual_v2.2.pdf
 # Table 3, page 20
 
-SEAL22_2048 = LWEParameters(
+SEAL22_2048 = RingLWEParameters(
     n=2048,
     q=2**60 - 2**14 + 1,
     Xs=UniformMod(3),
@@ -442,7 +444,7 @@ SEAL22_2048 = LWEParameters(
     tag="SEAL22_2048",
 )
 
-SEAL22_4096 = LWEParameters(
+SEAL22_4096 = RingLWEParameters(
     n=4096,
     q=2**116 - 2**18 + 1,
     Xs=UniformMod(3),
@@ -450,7 +452,7 @@ SEAL22_4096 = LWEParameters(
     tag="SEAL22_4096",
 )
 
-SEAL22_8192 = LWEParameters(
+SEAL22_8192 = RingLWEParameters(
     n=8192,
     q=2**226 - 2**26 + 1,
     Xs=UniformMod(3),
@@ -458,7 +460,7 @@ SEAL22_8192 = LWEParameters(
     tag="SEAL22_8192",
 )
 
-SEAL22_16384 = LWEParameters(
+SEAL22_16384 = RingLWEParameters(
     n=16384,
     q=2**435 - 2**33 + 1,
     Xs=UniformMod(3),
@@ -466,7 +468,7 @@ SEAL22_16384 = LWEParameters(
     tag="SEAL22_16384",
 )
 
-SEAL22_32768 = LWEParameters(
+SEAL22_32768 = RingLWEParameters(
     n=32768,
     q=2**889 - 2**54 - 2**53 - 2**52 + 1,
     Xs=UniformMod(3),
@@ -482,52 +484,52 @@ SEAL22_32768 = LWEParameters(
 # Table 1, page 6
 # 80-bit security
 
-HElib80_1024 = LWEParameters(
+HElib80_1024 = RingLWEParameters(
     n=1024,
     q=2**47,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=3.2),
     tag="HElib80_1024",
 )
 
-HElib80_2048 = LWEParameters(
+HElib80_2048 = RingLWEParameters(
     n=2048,
     q=2**87,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=3.2),
     tag="HElib80_2048",
 )
 
-HElib80_4096 = LWEParameters(
+HElib80_4096 = RingLWEParameters(
     n=4096,
     q=2**167,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=3.2),
     tag="HElib80_4096",
 )
 
 # 120-bit security
 
-HElib120_1024 = LWEParameters(
+HElib120_1024 = RingLWEParameters(
     n=1024,
     q=2**38,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=3.2),
     tag="HElib80_1024",
 )
 
-HElib120_2048 = LWEParameters(
+HElib120_2048 = RingLWEParameters(
     n=2048,
     q=2**70,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=3.2),
     tag="HElib80_2048",
 )
 
-HElib120_4096 = LWEParameters(
+HElib120_4096 = RingLWEParameters(
     n=4096,
     q=2**134,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=3.2),
     tag="HElib80_4096",
 )
@@ -536,43 +538,44 @@ HElib120_4096 = LWEParameters(
 # Test parameters from CHHS
 # https://eprint.iacr.org/2019/1114.pdf
 # Table 4, page 18
+# Originally unstructured (not RingLWE)
 
-CHHS_1024_25 = LWEParameters(
+CHHS_1024_25 = RingLWEParameters(
     n=1024,
     q=2**25,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=stddevf(8)),
     tag="CHHS_1024_25",
 )
 
-CHHS_2048_38 = LWEParameters(
+CHHS_2048_38 = RingLWEParameters(
     n=2048,
     q=2**38,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=stddevf(8)),
     tag="CHHS_2048_38",
 )
 
-CHHS_2048_45 = LWEParameters(
+CHHS_2048_45 = RingLWEParameters(
     n=2048,
     q=2**45,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=stddevf(8)),
     tag="CHHS_2048_45",
 )
 
-CHHS_4096_67 = LWEParameters(
+CHHS_4096_67 = RingLWEParameters(
     n=4096,
     q=2**67,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=stddevf(8)),
     tag="CHHS_4096_67",
 )
 
-CHHS_4096_82 = LWEParameters(
+CHHS_4096_82 = RingLWEParameters(
     n=4096,
     q=2**82,
-    Xs=SparseTernary(32),
+    Xs=SparseTernary(64),
     Xe=DiscreteGaussian(stddev=stddevf(8)),
     tag="CHHS_4096_82",
 )

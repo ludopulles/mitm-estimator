@@ -1,16 +1,15 @@
 # -*- coding: utf-8 -*-
 """
 EXAMPLES::
-        >>> from estimator import prob
-    >>> from estimator.nd import SparseTernary
+    >>> from estimator import prob, ND
     >>> # guess no coordinates: we will do one guess, and hit with probability 1
-    >>> prob.guessing_set_and_hit_probability(0, SparseTernary(16, 16, 512), 0)
+    >>> prob.guessing_set_and_hit_probability(0, ND.SparseTernary(32, n=512), 0)
     (1, 1.0)
     >>> # guess 16 coordinates are all zero
-    >>> prob.guessing_set_and_hit_probability(16, SparseTernary(16, 16, 512), 0)
+    >>> prob.guessing_set_and_hit_probability(16, ND.SparseTernary(32, n=512), 0)
     (1, 0.350436753852275)
     >>> # guess 16 coordinates have total Hamming weight at most 1
-    >>> prob.guessing_set_and_hit_probability(16, SparseTernary(16, 16, 512), 1)
+    >>> prob.guessing_set_and_hit_probability(16, ND.SparseTernary(32, n=512), 1)
     (33, 0.736293996803598)
 
 """
@@ -19,10 +18,12 @@ from sage.all import binomial, ZZ, log, ceil, RealField, oo, exp, RDF, cached_fu
 from sage.all import RealDistribution, RR, sqrt, prod, erf
 from .conf import max_n_cache
 from .nd import NoiseDistribution
+from .util import LazyEvaluation
 
-chisquared_table = {i: None for i in range(2*max_n_cache+1)}
-for i in range(2*max_n_cache+1):
-    chisquared_table[i] = RealDistribution('chisquared', i)
+chisquared_CDF = LazyEvaluation(
+    lambda i: RealDistribution('chisquared', i).cum_distribution_function,
+    2*max_n_cache
+)
 
 
 def conditional_chi_squared(d1, d2, lt, l2):
@@ -52,8 +53,8 @@ def conditional_chi_squared(d1, d2, lt, l2):
         >>> prob.conditional_chi_squared(100, 5, 50, .7)
         5.4021875103989546e-06
     """
-    D1 = chisquared_table[d1].cum_distribution_function
-    D2 = chisquared_table[d2].cum_distribution_function
+    D1 = chisquared_CDF[d1]
+    D2 = chisquared_CDF[d2]
     l2 = RR(l2)
 
     PE2 = D2(l2)
@@ -95,24 +96,31 @@ def gaussian_cdf(mu, sigma, t):
 
 def mitm_babai_probability(r, stddev, fast=False):
     """
-    Compute the "e-admissibility" probability associated to the mitm step, according to
+    Compute the "e-admissibility" probability associated to the MitM step, according to
     [WAHC:SonChe19]_
 
     :params r: the squared GSO lengths
     :params stddev: the std.dev of the error distribution
-    :param fast: toggle for setting p = 1 (faster, but underestimates security)
-    :return: probability for the mitm process
+    :param fast: number of coordinates to compute exactly while underestimating security for the
+                 rest (the lower value the faster, but underestimates security).
+                 Set to false to compute the exact value.
+    :return: probability for the MitM process
     """
+    # Using RDF.pi() to prevent memory leakage:
+    # see https://ask.sagemath.org/question/45863/memory-usage-strictly-increasing-on-sage-interactive-shell/
+    c = RR(1.0 / sqrt(RDF.pi()))
+
     if fast:
-        # overestimate the probability -> underestimate security
-        return 1
+        # Compute p_adm for the last `num_exact` coordinates exactly, and approximate the others.
+        num_exact = min(fast, len(r))
+        xs = [RR((.5 * ri)**.5) / stddev for ri in r[-num_exact:]]
+        ps = [RR(1.0 - c / x if x > 100 else erf(x) - c * (1 - exp(-x**2)) / x) for x in xs]
+        return ps[0]**(len(r) - num_exact) * prod(ps)
 
     # Note: `r` contains *square norms*, so convert to non-square norms.
     # Follow the proof of Lemma 4.2 [WAHC:SonChe19]_, because that one uses standard deviation.
-    xs = [sqrt(.5 * ri) / stddev for ri in r]
-    # Using RDF.pi() to prevent memory leakage:
-    # see https://ask.sagemath.org/question/45863/memory-usage-strictly-increasing-on-sage-interactive-shell/
-    p = prod(RR(erf(x) - (1 - exp(-x**2)) / (x * sqrt(RDF.pi()))) for x in xs)
+    xs = [RR((.5 * ri)**.5) / stddev for ri in r]
+    p = prod(RR(erf(x) - c * (1 - exp(-x**2)) / x) for x in xs)
     assert 0.0 <= p <= 1.0
     return p
 
@@ -126,6 +134,17 @@ def babai(r, norm):
     T = RealDistribution("beta", ((len(r) - 1) / 2, 1.0 / 2))
     probs = [1 - T.cum_distribution_function(1 - r_ / denom) for r_ in r]
     return prod(probs)
+
+
+def babai_gaussian(r, stddev):
+    """
+    Babai probability when the target is a gaussian with a standard deviation of `stddev`.
+    """
+    xs = [sqrt(ri / 8.0) / stddev for ri in r]  # .5||b_i*|| / sqrt(2) / sqrt(variance).
+    # Note: the first Gram-Schmidt norms don't influence `p`, as erf(x)~1.
+    p = prod(RR(erf(x)) for x in xs)
+    assert 0.0 <= p <= 1.0
+    return p
 
 
 def drop(n, h, k, fail=0, rotations=False):
@@ -239,37 +258,28 @@ def guessing_set_and_hit_probability(zeta: int, dist: NoiseDistribution, hw: int
         hit_probability = 1.0
         return search_space, hit_probability
 
-    else:
-        # we form the set of all vectors of weight hw when drawing from dist
-        # the total number of non-zero entries
-        h = dist.hamming_weight
-        # e.g. (-1, 1) -> two non-zero per entry
-        base = dist.bounds[1] - dist.bounds[0]
-        # our starting hw
-        min_hw = max(0, zeta - dist.n + h)
-        max_hw = min(zeta, h)
+    # we form the set of all vectors of weight hw when drawing from dist
+    # the total number of non-zero entries
+    h = dist.hamming_weight
+    # e.g. (-1, 1) -> two non-zero per entry
+    base = dist.bounds[1] - dist.bounds[0]
+    # our starting hw
+    min_hw = max(0, zeta - dist.n + h)
+    max_hw = min(zeta, h)
 
-        if hw < min_hw:
-            raise ValueError(f"hw={hw} < min feasible hw={min_hw}")
-        if hw > max_hw:
-            raise ValueError(f"hw={hw} > max feasible hw={max_hw}")
+    if hw < min_hw:
+        raise ValueError(f"hw={hw} < min feasible hw={min_hw}")
+    if hw > max_hw:
+        raise ValueError(f"hw={hw} > max feasible hw={max_hw}")
 
-        # calculate the number of elements of exactly hw and the probability this segment has weight exactly hw
-        if hw == 0:
-            search_space = binomial(zeta, hw)
-        elif base == oo:
-            search_space = oo
-        else:
-            search_space = binomial(zeta, hw) * base**hw
+    # calculate the number of elements of exactly hw and the probability this segment has weight exactly hw
+    search_space = 1 if hw == 0 else (binomial(zeta, hw) * base**hw)
+    probability = RR(drop(dist.n, h, zeta, fail=hw))
 
-        probability = RR(drop(dist.n, h, zeta, fail=hw))
+    if hw > min_hw:
+        # recurse using cached values for smaller hw
+        prev_search_space, prev_probability = guessing_set_and_hit_probability(zeta, dist, hw - 1)
+        search_space += prev_search_space
+        probability += prev_probability
 
-        if hw > min_hw:
-            # recurse using cached values for smaller hw
-            prev_search_space, prev_probability = guessing_set_and_hit_probability(
-                zeta, dist, hw - 1
-            )
-            search_space += prev_search_space
-            probability += prev_probability
-
-        return search_space, probability
+    return search_space, probability

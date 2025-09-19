@@ -14,6 +14,7 @@ References
 .. [C:GuoJohSta15] Guo, Q., Johansson, T., & Stankovski, P. (2015). Coded-BKW: Solving LWE using Lattice Codes. In R. Gennaro, & M. J. B. Robshaw, CRYPTO 2015, Part I (pp. 23–42): Springer, Heidelberg.
 .. [C:HowgraveGraham07] Nick Howgrave-Graham. A hybrid lattice-reduction and meet-in-the-middle attack against NTRU. In A. Menezes, CRYPTO 2007 (pp. 150–169). : Springer, Heidelberg.
 .. [C:KirFou15] Paul Kirchner & Pierre-Alain Fouque. An improved BKW algorithm for LWE with applications to cryptography and lattices. In R. Gennaro, & M. J. B. Robshaw, CRYPTO 2015, Part~I (pp. 43–62). : Springer, Heidelberg.
+.. [C:May21] May, Alexander. How to meet ternary LWE keys. In T. Malkin, C. Peikert, CRYPTO 2021, Part~II (pp. 701-731). : Springer, Heidelberg.
 .. [CheNgu12] Yuanmi Chen and Phong Q. Nguyen. BKZ 2.0: Better lattice security estimates (Full Version). 2012. http://www.di.ens.fr/~ychen/research/Full_BKZ.pdf
 .. [DCC:LaaMosPol15] Thijs Laarhoven, Michele Mosca, & Joop van de Pol. Finding shortest lattice vectors faster using quantum search. In Designs, COdes and Cryptography 2015 (pp. 375-400). https://doi.org/10.1007/s10623-015-0067-5
 .. [Dilithium21] Shi Bai, Léo Ducas, Eike Kiltz, Tancrède Lepoint, Vadim Lyubashevsky, Peter Schwabe, Gregor Seiler, Damien Stehlé. CRYSTALS-DILITHIUM. 2021 https://pq-crystals.org/dilithium/data/dilithium-specification-round3-20210208.pdf

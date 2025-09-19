@@ -18,7 +18,7 @@ We use Python classes as namespaces, something like this::
         @staticmethod
         def some_complex_function(a, b, c, log_level=5):
             cost = Cost(rop=a*b*c, a=a)
-            cost.register_impermanent(rop=True, a=False) # (6)
+            cost.register_impermanent(a=False) # (6)
             return cost
           
         def __call__(self, params, a=None, log_level=5):

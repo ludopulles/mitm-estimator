@@ -78,7 +78,7 @@ class LWEParameters:
 
             >>> from estimator import *
             >>> schemes.Kyber512
-            LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512')
+            ModuleLWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512', ringdeg=256, rank=2)
             >>> schemes.Kyber512.updated(m=1337)
             LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=1337, tag='Kyber 512')
 
@@ -98,7 +98,7 @@ class LWEParameters:
             >>> from sage.all import binomial, log
             >>> from estimator import *
             >>> schemes.Kyber512
-            LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512')
+            ModuleLWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512', ringdeg=256, rank=2)
             >>> schemes.Kyber512.amplify_m(2**100)
             LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=4.58), m=..., tag='Kyber 512')
 
@@ -112,7 +112,6 @@ class LWEParameters:
             return self
         if self.m == oo:
             return self
-        d = dict(self.__dict__)
 
         if self.Xe.mean != 0:
             raise NotImplementedError("Amplifying for μ≠0 not implemented.")
@@ -122,10 +121,7 @@ class LWEParameters:
             #  -two signs per position (+1,-1)
             # - all "-" and all "+" are the same
             if binomial(self.m, k) * 2**k - 1 >= m:
-                Xe = DiscreteGaussian(float(sqrt(k) * self.Xe.stddev))
-                d["Xe"] = Xe
-                d["m"] = ceil(m)
-                return LWEParameters(**d)
+                return self.updated(Xe=DiscreteGaussian(float(sqrt(k) * self.Xe.stddev)), m=ceil(m))
         else:
             raise NotImplementedError(
                 f"Cannot amplify to ≈2^{log(m, 2):1} using {{+1,-1}} additions."
@@ -158,14 +154,44 @@ class LWEParameters:
         if scale > 1 / sqrt(2):
             return self
 
-        return LWEParameters(
-            self.n,
-            p,
-            Xs=self.Xs,
-            Xe=DiscreteGaussian(sqrt(2) * self.Xe.stddev * scale),
-            m=self.m,
-            tag=f"{self.tag},scaled" if self.tag else None,
-        )
+        new_Xe = DiscreteGaussian(sqrt(2) * self.Xe.stddev * scale)
+        new_tag = f"{self.tag},scaled" if self.tag else None
+        return self.updated(q=p, Xe=new_Xe, tag=new_tag)
 
     def __hash__(self):
         return hash((self.n, self.q, self.Xs, self.Xe, self.m, self.tag))
+
+
+@dataclass
+class ModuleLWEParameters(LWEParameters):
+    """The parameters for a Learning With Errors problem instance, using module structure."""
+
+    ringdeg: int = 1  #: use module structure using ring R = Z[X] / (X^{ringdeg} + 1), for `ringdeg` a power of two.
+    rank: int = 1  #: rank of the R-module
+
+    def __init__(self, ringdeg: int, rank: int, q, Xs: NoiseDistribution, Xe: NoiseDistribution,
+                 m: int = oo, tag: str = None):
+        assert (self.ringdeg & (self.ringdeg - 1)) == 0, "`ringdeg` must be a power of two"
+        self.ringdeg = ringdeg
+        self.rank = rank
+        super().__init__(self.ringdeg * self.rank, q, Xs, Xe, m, tag)
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.ringdeg, self.rank))
+
+    def unstructured(self):
+        """
+        Return the unstructured LWEParameters, forgetting the module structure.
+        """
+        return LWEParameters(self.n, self.q, self.Xs, self.Xe, self.m, self.tag)
+
+    def updated(self, **kwds):
+        """
+        Return a new set of (unstructured parameters) updated according to ``kwds``.
+        """
+        return self.unstructured().updated(**kwds)
+
+
+def RingLWEParameters(n: int, q, Xs: NoiseDistribution, Xe: NoiseDistribution, m: int = oo, tag: str = None):
+    """Return parameters for a Learning With Errors problem instance, using ring structure."""
+    return ModuleLWEParameters(n, 1, q, Xs, Xe, m, tag)
