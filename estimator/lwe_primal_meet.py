@@ -84,7 +84,7 @@ class PrimalMeet:
             logL[2] = logS[2] - log_R1
 
             # Analyse the runtime
-            log_runtime = sum_log(*logL.values())
+            log_runtime = RR(sum_log(*logL.values()))
 
             # Analyse the success probability
             bet_s1 = logS[11] + logS[12] - logS[1]
@@ -115,7 +115,7 @@ class PrimalMeet:
 
             # Multiply the runtime by the number of calls to Babai in dimension `d`.
             # And multiply the success probability with the admissibility probability.
-            log_runtime += log(PrimalHybrid.babai_cost(dim_babai)["rop"])
+            log_runtime += RR(log(PrimalHybrid.babai_cost(dim_babai)["rop"]))
 #            log_bet += log(prob_adm)
 
             # Repeat the MEET algorithm 1/ (exp(log_bet) p_{adm}) times.
