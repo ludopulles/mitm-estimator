@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 from dataclasses import dataclass
-from copy import copy
 
 from sage.all import oo, binomial, log, sqrt, ceil
 
-from .nd import NoiseDistribution
+from .nd import NoiseDistribution, DiscreteGaussian
 from .errors import InsufficientSamplesError
 
 
@@ -24,11 +23,9 @@ class LWEParameters:
     tag: str = None  #: a name for the patameter set
 
     def __post_init__(self, **kwds):
-        self.Xs = copy(self.Xs)
-        self.Xs.n = self.n
+        self.Xs = self.Xs.resize(self.n)
         if self.m < oo:
-            self.Xe = copy(self.Xe)
-            self.Xe.n = self.m
+            self.Xe = self.Xe.resize(self.m)
 
     @property
     def _homogeneous(self):
@@ -60,10 +57,12 @@ class LWEParameters:
 
         # Normal form transformation
         if self.Xe < self.Xs and self.m >= 2 * self.n:
-            return LWEParameters(n=self.n, q=self.q, Xs=self.Xe, Xe=self.Xe, m=self.m - self.n, tag=self.tag)
-        # swap secret and noise
-        # TODO: this is somewhat arbitrary
-        if self.Xe < self.Xs and self.m < 2 * self.n:
+            return LWEParameters(
+                n=self.n, q=self.q, Xs=self.Xe, Xe=self.Xe, m=self.m - self.n, tag=self.tag
+            )
+
+        # swap secret and noise but only if m = n
+        if self.Xe < self.Xs and self.m == self.n:
             return LWEParameters(n=self.n, q=self.q, Xs=self.Xe, Xe=self.Xs, m=self.n, tag=self.tag)
 
         # nothing to do
@@ -123,12 +122,14 @@ class LWEParameters:
             #  -two signs per position (+1,-1)
             # - all "-" and all "+" are the same
             if binomial(self.m, k) * 2**k - 1 >= m:
-                Xe = NoiseDistribution.DiscreteGaussian(float(sqrt(k) * self.Xe.stddev))
+                Xe = DiscreteGaussian(float(sqrt(k) * self.Xe.stddev))
                 d["Xe"] = Xe
                 d["m"] = ceil(m)
                 return LWEParameters(**d)
         else:
-            raise NotImplementedError(f"Cannot amplify to ≈2^{log(m, 2):1} using {{+1,-1}} additions.")
+            raise NotImplementedError(
+                f"Cannot amplify to ≈2^{log(m, 2):1} using {{+1,-1}} additions."
+            )
 
     def switch_modulus(self):
         """
@@ -143,10 +144,11 @@ class LWEParameters:
             LWEParameters(n=128, q=5289, Xs=D(σ=0.82), Xe=D(σ=3.08), m=+Infinity, tag=None)
 
         """
-        n = self.Xs.density * len(self.Xs)
+        # Note: hamming_weight rounds to an integer, which we do not want here.
+        h = len(self.Xs) * self.Xs._density
 
-        # n uniform in -(0.5,0.5) ± stddev(χ_s)
-        Xr_stddev = sqrt(n / 12) * self.Xs.stddev  # rounding noise
+        # h uniform in -(0.5,0.5) ± stddev(χ_s)
+        Xr_stddev = sqrt(h / 12) * self.Xs.stddev  # rounding noise
         # χ_r == p/q ⋅ χ_e # we want the rounding noise match the scaled noise
         p = ceil(Xr_stddev * self.q / self.Xe.stddev)
 
@@ -160,7 +162,7 @@ class LWEParameters:
             self.n,
             p,
             Xs=self.Xs,
-            Xe=NoiseDistribution.DiscreteGaussian(sqrt(2) * self.Xe.stddev * scale),
+            Xe=DiscreteGaussian(sqrt(2) * self.Xe.stddev * scale),
             m=self.m,
             tag=f"{self.tag},scaled" if self.tag else None,
         )

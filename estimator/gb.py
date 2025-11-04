@@ -41,6 +41,8 @@ def gb_cost(n, D, omega=2, prec=None):
         rop: ≈2^144.6, dreg: 17, mem: ≈2^144.6
 
     """
+    Cost.register_impermanent(dreg=False)
+
     prec = 2 * n if prec is None else prec
 
     R = PowerSeriesRing(QQ, "z", prec)
@@ -52,7 +54,6 @@ def gb_cost(n, D, omega=2, prec=None):
     s = prod(((1 - z**d)**m for d, m in D), s) / (1 - z) ** n
 
     retval = Cost(rop=oo, dreg=oo)
-    retval.register_impermanent({"rop": True, "dreg": False, "mem": False})
 
     for dreg in range(prec):
         if s[dreg] < 0:
@@ -213,8 +214,7 @@ class AroraGB:
             rop: ≈2^227.2, dreg: 54, mem: ≈2^227.2, t: 4, m: 1024, tag: arora-gb
             >>> LWE.arora_gb(params.updated(Xs=ND.UniformMod(3), Xe=ND.CenteredBinomial(4), m=1024))
             rop: ≈2^189.9, dreg: 39, mem: ≈2^189.9, t: 4, m: 1024, tag: arora-gb
-            >>> Xs, Xe =ND.SparseTernary(1024, 64, 0), ND.DiscreteGaussian(2**10)
-            >>> LWE.arora_gb(LWE.Parameters(n=1024, q=2**40, Xs=Xs, Xe=Xe))
+            >>> LWE.arora_gb(LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseBinary(64), Xe=ND.DiscreteGaussian(2**10)))
             rop: ≈2^inf, dreg: ≈2^inf, tag: arora-gb
 
         ..  [EPRINT:ACFP14] Martin R. Albrecht, Carlos Cid, Jean-Charles Faugère & Ludovic Perret. (2014).
@@ -224,10 +224,10 @@ class AroraGB:
             errors.  In L.  Aceto, M.  Henzinger, & J.  Sgall, ICALP 2011, Part I (pp.  403–415).:
             Springer, Heidelberg.
         """
-        params = params.normalize()
+        Cost.register_impermanent(dreg=False)
 
+        params = params.normalize()
         best = Cost(rop=oo, dreg=oo)
-        best.register_impermanent({"rop": True, "dreg": False, "mem": False})
 
         if params.Xe.is_bounded:
             cost = self.cost_bounded(

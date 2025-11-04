@@ -1,10 +1,11 @@
 import itertools as it
+from math import lgamma
 from multiprocessing import Pool
 from functools import partial
 from dataclasses import dataclass, field
 from typing import Any, Callable, NamedTuple
 
-from sage.all import ceil, floor, log, oo, RR, cached_function, zeta
+from sage.all import ceil, floor, log, oo, pi, RR, cached_function, zeta
 
 from .io import Logging
 from .lwe_parameters import LWEParameters
@@ -20,6 +21,22 @@ def log2(x):
 def zeta_prime(x):
     h = 1e-5
     return RR((zeta(x+h) - zeta(x-h)))/(2*h)
+
+
+def bisect_false_true(f, lo: int, hi: int):
+    """
+    Assume there exists a unique i in [lo+1, hi] such that:
+        1) f(lo) = f(lo + 1) = ... = f(i - 1) = False,
+        2) f(i) = f(i + 1) = ... = f(hi) = True.
+    returns `i`.
+    """
+    while lo + 1 < hi:
+        mid = (lo + hi) // 2
+        if f(mid):
+            hi = mid
+        else:
+            lo = mid
+    return hi
 
 
 # Low beta Gaussian Heuristic constant for use in NTRU Dense sublattice estimation.
@@ -41,6 +58,20 @@ small_slope_t8 = {2: 0.04473, 3: 0.04472, 4: 0.04402, 5: 0.04407, 6: 0.04334, 7:
                   45: 0.02583, 46: 0.02559, 47: 0.02534, 48: 0.02514, 49: 0.02506, 50: 0.02493, 51: 0.02475,
                   52: 0.02454, 53: 0.02441, 54: 0.02427, 55: 0.02407, 56: 0.02393, 57: 0.02371, 58: 0.02366,
                   59: 0.02341, 60: 0.02332}
+
+
+@cached_function
+def ball_log_vol(n):
+    return RR((n/2.) * log(pi) - lgamma(n/2. + 1))
+
+
+def log_gh(d, logvol=0):
+    """
+    Gaussian Heuristic in dimension `d`.
+    """
+    if d <= 50:
+        return RR(gh_constant[d] + logvol/d)
+    return RR(1./d * (logvol - ball_log_vol(d)))
 
 
 @dataclass
@@ -443,8 +474,9 @@ def batch_estimate(params, algorithm, jobs=1, log_level=0, catch_exceptions=True
 
         >>> from estimator import LWE
         >>> from estimator.schemes import Kyber512
-        >>> _ = batch_estimate(Kyber512, [LWE.primal_usvp, LWE.primal_bdd])
-        >>> _ = batch_estimate(Kyber512, [LWE.primal_usvp, LWE.primal_bdd], jobs=2)
+        >>> from estimator.util import batch_estimate
+        >>> _ = batch_estimate(Kyber512, [LWE.primal_usvp, LWE.primal_bdd], log_level=1)
+        >>> _ = batch_estimate(Kyber512, [LWE.primal_usvp, LWE.primal_bdd], jobs=2, log_level=1)
 
     """
 
