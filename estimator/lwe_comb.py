@@ -149,7 +149,7 @@ class MeetREP0:
         EXAMPLE::
 
             >>> from estimator import *
-            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(10), Xe=ND.UniformMod(10))
+            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(20, 10), Xe=ND.UniformMod(10))
             >>> LWE.meet_rep0(params)
             rop: ≈2^59.7, mem: ≈2^45.8, ↻: ≈2^13.9, r: 3, tag: REP-0 (d=2)
 
@@ -159,6 +159,7 @@ class MeetREP0:
 
         # Check for ternary instead of sparse ternary.
         assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
+        assert 2 * params.Xs.ones == params.Xs.hamming_weight
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
@@ -357,7 +358,7 @@ class MeetREP1:
         EXAMPLE::
 
             >>> from estimator import *
-            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(10), Xe=ND.UniformMod(10))
+            >>> params = LWE.Parameters(n=200, q=127, Xs=ND.SparseTernary(20, 10), Xe=ND.UniformMod(10))
             >>> LWE.meet_rep1(params)
             rop: ≈2^59.1, mem: ≈2^50.3, ↻: 452, r: 4, ε: 1, tag: REP-1 (d=2)
 
@@ -367,6 +368,7 @@ class MeetREP1:
 
         # Check for ternary instead of sparse ternary.
         assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
+        assert 2 * params.Xs.ones == params.Xs.hamming_weight
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
@@ -461,6 +463,7 @@ class MeetREP1:
 
         # Check for ternary instead of sparse ternary.
         assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
+        assert 2 * params.Xs.ones == params.Xs.hamming_weight
         assert params.Xs.mean == 0, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 

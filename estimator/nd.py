@@ -197,9 +197,9 @@ class NoiseDistribution:
 
             >>> from estimator import *
             >>> ND.SparseTernary(128, n=1024).hamming_weight
-            256
-            >>> ND.SparseTernary(128, 64, 1024).hamming_weight
-            192
+            128
+            >>> ND.SparseTernary(128, 30, 1024).hamming_weight
+            128
         """
         return round(len(self) * float(self._density))
 
@@ -455,56 +455,60 @@ class TUniform(NoiseDistribution):
 
 class SparseTernary(NoiseDistribution):
     """
-    Distribution of vectors of length ``n`` with ``p`` entries of 1 and ``m`` entries of -1, rest 0.
+    Distribution of vectors of length ``n`` s.t. ``hw`` are -1 or 1, and the rest is zero.
+    If ``ones`` is specified, then precisely ``ones`` entries are +1, and ``hw - ones`` are -1.
 
     EXAMPLE::
 
         >>> from estimator import *
         >>> ND.SparseTernary(10, n=100)
-        T(p=10, m=10, n=100)
-        >>> ND.SparseTernary(10, 10, 100)
-        T(p=10, m=10, n=100)
+        T(hw=10, n=100)
         >>> ND.SparseTernary(10, 8, 100)
-        T(p=10, m=8, n=100)
+        T(hw=10, ones=8, n=100)
         >>> ND.SparseTernary(0, 0, 0).support_size()
         1
     """
-    def __init__(self, p, m=None, n=None):
-        p, m = int(p), int(p if m is None else m)
-        self.p, self.m = p, m
+    def __init__(self, hw, ones=None, n=None):
+        self.hamming_weight = int(hw)
+        self.ones = None if ones is None else int(ones)
 
         # Yes, n=0 might happen when estimating the cost of the dual attack! Support size is 1
         if n is None:
             # Treat it the same as n=0.
             n = 0
-        mean = 0 if n == 0 else RR((p - m) / n)
-        density = 0 if n == 0 else RR((p + m) / n)
+
+        mean, bounds = 0, (-1, 1)
+        if ones is None:
+            if ones == hw:
+                bounds[0] = 0
+            if ones == 0:
+                bounds[1] = 0
+            if n > 0:
+                mean = (ones - (hw - ones)) / n
+        else:
+            self.ones = int(ones)
+
+        density = 0 if n == 0 else RR(hw / n)
         stddev = sqrt(density - mean**2)
 
-        super().__init__(
-            n=n,
-            mean=mean,
-            stddev=stddev,
-            bounds=(0 if m == 0 else -1, 0 if p == 0 else 1),
-            _density=density,
-        )
+        super().__init__(n=n, mean=mean, stddev=stddev, bounds=bounds, _density=density)
 
     def __hash__(self):
         """
         EXAMPLE::
 
             >>> from estimator import *
-            >>> hash(ND.SparseTernary(16, n=128)) == hash(("SparseTernary", 128, 16, 16))
+            >>> hash(ND.SparseTernary(32, 16, n=128)) == hash(("SparseTernary", 32, 16, 128))
             True
         """
-        return hash(("SparseTernary", self.n, self.p, self.m))
+        return hash(("SparseTernary", self.hamming_weight, self.ones, self.n))
 
     def resize(self, new_n):
         """
         Return an altered distribution having a dimension `new_n`.
-        Assumes `p` and `m` stay the same.
+        This leaves `w` and `ones` the same.
         """
-        return SparseTernary(self.p, self.m, new_n)
+        return SparseTernary(self.hamming_weight, self.ones, new_n)
 
     def split_balanced(self, new_n, new_hw=None):
         """
@@ -520,11 +524,13 @@ class SparseTernary(NoiseDistribution):
             # Most likely split has same density: new_hw / new_n = hw / n.
             new_hw = int(QQ(hw * new_n / n).round('down'))
 
-        new_p = int((QQ(new_hw * self.p) / hw).round('down'))
-        new_m = new_hw - new_p
+        onesL, onesR = None, None
+        if self.ones is None:
+            onesL = int((QQ(new_hw * self.ones) / hw).round('down'))
+            onesR, self.ones - onesL
         return (
-            SparseTernary(new_p, new_m, new_n),
-            SparseTernary(self.p - new_p, self.m - new_m, n - new_n)
+            SparseTernary(new_hw, onesL, new_n),
+            SparseTernary(hw - new_hw, onesR, n - new_n)
         )
 
     def split_probability(self, new_n, new_hw=None):
@@ -545,10 +551,6 @@ class SparseTernary(NoiseDistribution):
         """
         return True
 
-    @property
-    def hamming_weight(self):
-        return self.p + self.m
-
     def support_size(self, fraction=1.0):
         """
         Compute the size of the support covering the probability given as fraction.
@@ -559,7 +561,10 @@ class SparseTernary(NoiseDistribution):
             >>> ND.SparseTernary(8, 8, 64).support_size()
             6287341680214194176
         """
-        n, p, m = len(self), self.p, self.m
+        n, hw = len(self), self.hamming_weight
+        if self.ones is None:
+            return ceil(binomial(len(self), hw) * RR(2.0**hw * fraction))
+        p, m = self.ones, hw - self.ones
         return ceil(binomial(n, p) * binomial(n - p, m) * RR(fraction))
 
     def __str__(self):
@@ -567,14 +572,22 @@ class SparseTernary(NoiseDistribution):
         EXAMPLE::
 
             >>> from estimator import *
-            >>> ND.SparseTernary(20, 20, n=100)
-            T(p=20, m=20, n=100)
+            >>> ND.SparseTernary(40)
+            T(hw=40)
+            >>> ND.SparseTernary(40, n=100)
+            T(hw=40, n=100)
+            >>> ND.SparseTernary(40, 10, n=100)
+            T(hw=40, ones=10, n=100)
+            >>> ND.SparseTernary(40, 10)
+            T(hw=40, ones=10)
 
         """
-        if self.n:
-            return f"T(p={self.p}, m={self.m}, n={int(self.n)})"
-        else:
-            return f"T(p={int(self.p)}, m={int(self.m)})"
+        s = f"(T(hw={self.hamming_weight}"
+        if self.ones is not None:
+            s += f", ones={self.ones}"
+        if self.n is not None:
+            s += f", n={int(self.n)}"
+        return s
 
     def __repr__(self):
         return str(self)
@@ -590,7 +603,7 @@ def SparseBinary(hw, n=None):
         >>> ND.SparseBinary(10).bounds
         (0, 1)
     """
-    return SparseTernary(hw, 0, n)
+    return SparseTernary(hw, hw, n)
 
 
 """

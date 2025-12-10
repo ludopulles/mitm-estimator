@@ -124,12 +124,12 @@ class guess_composition:
 
             >>> from estimator import *
             >>> from estimator.lwe_guess import guess_composition
-            >>> guess_composition(LWE.primal_usvp)(schemes.Kyber512.updated(Xs=ND.SparseTernary(16)))
+            >>> guess_composition(LWE.primal_usvp)(schemes.Kyber512.updated(Xs=ND.SparseTernary(32)))
             rop: ≈2^102.1, red: ≈2^102.1, δ: 1.008011, β: 132, d: 461, tag: usvp, ↻: ≈2^34.9, ζ:...
 
         Compare::
 
-            >>> LWE.primal_hybrid(schemes.Kyber512.updated(Xs=ND.SparseTernary(16)))
+            >>> LWE.primal_hybrid(schemes.Kyber512.updated(Xs=ND.SparseTernary(32)))
             rop: ≈2^87.1, red: ≈2^85.1, svp: ≈2^86.6, β: 117, η: 2, ζ: 367, |S|: ≈2^94.3, d: 373...
 
         """
@@ -161,7 +161,7 @@ class ExhaustiveSearch:
             >>> params = LWE.Parameters(n=64, q=2**40, Xs=ND.Binary, Xe=ND.DiscreteGaussian(3.2))
             >>> exhaustive_search(params)
             rop: ≈2^73.6, mem: ≈2^72.6, m: 397.198
-            >>> params = LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseTernary(32), Xe=ND.DiscreteGaussian(3.2))
+            >>> params = LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseTernary(64), Xe=ND.DiscreteGaussian(3.2))
             >>> exhaustive_search(params)
             rop: ≈2^413.9, mem: ≈2^412.9, m: ≈2^11.1
 
@@ -349,7 +349,7 @@ class MITM:
             rop: ≈2^37.0, mem: ≈2^37.2, m: 37, k: 32
             >>> mitm(params, optimization="numerical")
             rop: ≈2^39.2, m: 36, k: 32, mem: ≈2^39.1
-            >>> params = LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseTernary(32), Xe=ND.DiscreteGaussian(3.2))
+            >>> params = LWE.Parameters(n=1024, q=2**40, Xs=ND.SparseTernary(64), Xe=ND.DiscreteGaussian(3.2))
             >>> mitm(params)
             rop: ≈2^217.8, mem: ≈2^210.2, m: ≈2^15.5, k: 512, ↻: 226
             >>> mitm(params, optimization="numerical")
