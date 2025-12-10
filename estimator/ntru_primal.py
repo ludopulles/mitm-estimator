@@ -380,7 +380,7 @@ class NTRUPrimalHybrid(PrimalHybrid):
         EXAMPLES::
 
             >>> from estimator import *
-            >>> params = schemes.NTRUHPS2048509Enc.updated(Xs=ND.SparseTernary(16))
+            >>> params = schemes.NTRUHPS2048509Enc.updated(Xs=ND.SparseTernary(32))
             >>> NTRU.primal_hybrid(params, mitm=False, babai=False)
             rop: ≈2^88.8, red: ≈2^87.9, svp: ≈2^87.6, β: 141, η: 19, ζ: 296, |S|: ≈2^50.2, d: 45...
 
