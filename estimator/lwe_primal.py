@@ -754,7 +754,7 @@ class PrimalHybrid:
         EXAMPLES::
 
             >>> from estimator import *
-            >>> params = schemes.Kyber512.updated(Xs=ND.SparseTernary(32))
+            >>> params = schemes.Kyber512.updated(Xs=ND.SparseTernary(32, 16))
             >>> LWE.primal_hybrid(params, mitm=False, babai=False)
             rop: ≈2^90.8, red: ≈2^89.8, svp: ≈2^89.8, β: 161, η: 18, ζ: 287, |S|: ≈2^56.0, d: 50...
 
