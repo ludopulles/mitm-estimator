@@ -31,6 +31,111 @@ class PrimalMeet:
     """
 
     @staticmethod
+    def cost_meet_lwe_unbalanced(search_space: SparseTernary, r: int, sigma: float, prob_adm: float):
+        """
+        Compute the cost of doing REP-1 depth 2 Meet-LWE for a given search space,
+        in which the sparse ternary secret does not have a fixed number of +1's.
+
+        :param search_space: search space to perform REP-1 over.
+        :param r: simulated profile of reduced basis over which to meet.
+        :param sigma: stddev of error (noise).
+
+        """
+        n = search_space.n
+        n1, n2 = split_weight(n)
+
+        # The secret has `w` nonzero coefficients
+        w = search_space.hamming_weight
+        w0 = w // 2
+
+        # Find the best epsilon by exhaustive search.
+        # In practice, `epsilon` is 1, 2 or 3 so keep the range limited for performance.
+        best_cost = Cost(rop=oo, prob=1.0)
+
+        def cost_epsilon(epsilon):
+            w1 = w0 + epsilon  # weight at level 1
+            w2L, w2R = split_weight(w1)  # weights at level 2: Left and Right
+
+            # Number of ways that we can construct s from s1 + s2.
+            if w + epsilon > n:
+                return None
+
+            # s has n-w zero entries, and `epsilon` are formed by 0 = 1 + (-1) or 0 = (-1) + 1.
+            log_R1 = log_comb(n - w, epsilon) + log_comb(w, w0) + epsilon * RR(log(2))
+
+            logS = {}  # log(size of search space)
+            logL = {}  # log(size of list of stored candidates)
+
+            # Analyse level 2.
+            logL[11] = logS[11] = logL[21] = logS[21] = log_comb(n1, w2L) + w2L * RR(log(2))
+            logL[12] = logS[12] = logL[22] = logS[22] = log_comb(n2, w2R) + w2R * RR(log(2))
+
+            # Analyse level 1.
+            logS[1] = logS[2] = log_comb(n, w1) + w1 * RR(log(2))
+            logL[1] = logS[1] - log_R1
+            logL[2] = logS[2] - log_R1
+
+            # Analyse the runtime
+            log_runtime = RR(sum_log(*logL.values()))
+
+            # Analyse the success probability
+            bet_s1 = logS[11] + logS[12] - logS[1]
+            bet_s2 = logS[21] + logS[22] - logS[2]
+            assert bet_s1 < 0 and bet_s2 < 0
+            log_bet = bet_s1 + bet_s2
+
+            # Logarithm of the number of buckets needed to have an efficient meet algorithm.
+            # When using less, some buckets might get overcrowded, so listing near-collisions
+            # becomes slow.
+            log_idx = RR(max(logS[1], logS[2]))
+
+            log_meet_leftover, dim_babai = log_idx, 0
+            bound_meet = RR((len(r) * sigma)**2 * 2/pi)
+            # Note: `r` contains *square norms*, so don't forget to take square roots...
+            # r = copy(r)
+
+            for i in range(len(r))[::-1]:
+                dim_babai += 1
+                if r[i] > bound_meet:
+                    c_i = floor((r[i] / bound_meet)**.5)
+                    # r[i] /= c_i**2
+                    log_meet_leftover -= RR(log(c_i))
+                    if log_meet_leftover < 0:
+                        break
+
+#            prob_adm = RR(mitm_babai_probability(r, sigma, fast=1000))
+
+            # Multiply the runtime by the number of calls to Babai in dimension `d`.
+            # And multiply the success probability with the admissibility probability.
+            log_runtime += RR(log(PrimalHybrid.babai_cost(dim_babai)["rop"]))
+#            log_bet += log(prob_adm)
+
+            # Repeat the MEET algorithm 1/ (exp(log_bet) p_{adm}) times.
+            # All these repetitions fail with probability of 1/e.
+            runtime, prob = RR(exp(log_runtime - log_bet) / prob_adm), RR(1 - exp(-1))
+            return Cost(
+                rop=runtime, mem=runtime, prob=prob,
+                h_1=w1, h_2=w2L, epsilon=epsilon, log_idx=log_idx, dim_babai=dim_babai,
+            )
+
+        max_epsilon = 4
+        # Compute costs for all `epsilon <= max_epsilon`, and pick the best.
+        for epsilon in range(1, max_epsilon + 1):
+            cost = cost_epsilon(epsilon)
+            if not cost:
+                break
+            # As this Meet-LWE causes restarts on failure, minimize the Time/Probability ratio.
+            if cost["rop"] < best_cost["rop"]:
+                best_cost = cost
+        # Try to improve the epsilon until a worse one is found
+        while best_cost["epsilon"] == max_epsilon:
+            max_epsilon += 1
+            cost = cost_epsilon(max_epsilon)
+            if cost["rop"] < best_cost["rop"]:
+                best_cost = cost
+        return best_cost
+
+    @staticmethod
     def cost_meet_lwe(search_space: SparseTernary, r: int, sigma: float, prob_adm: float):
         """
         Compute the cost of doing REP-1 depth 2 Meet-LWE for a given search space.
@@ -150,6 +255,7 @@ class PrimalMeet:
         params: LWEParameters,
         beta: int,
         zeta: int,
+        succ_prob: float = 0.99,
         simulator=red_simulator_default,
         red_cost_model=red_cost_model_default,
     ):
@@ -164,7 +270,9 @@ class PrimalMeet:
         .. note :: This is the lowest level function that runs no optimization. It merely reports costs.
 
         """
-        assert isinstance(params.Xs, SparseTernary) and params.Xs.p == params.Xs.m
+        assert isinstance(params.Xs, SparseTernary)
+        assert (params.Xs.ones is None or  # unbalanced
+                params.Xs.ones * 2 == params.Xs.hamming_weight)  # balanced
 
         delta = deltaf(beta)
         n = params.n - zeta
@@ -185,8 +293,6 @@ class PrimalMeet:
 
         prob_np = RR(babai_gaussian(r, sigma))
         prob_adm = RR(mitm_babai_probability(r, sigma, fast=1000))
-        # print(f"zeta={zeta}, beta={beta} and r[-1]={float(r[-1] / sigma):6.1g} "
-        #       f"-> {float(RR(mitm_babai_probability(r, sigma))):.5f} vs {float(prob_adm):.5f}")
 
         # 2. Find the best hamming weight of the guess.
         best_cost = Cost(rop=oo)
@@ -204,7 +310,11 @@ class PrimalMeet:
                 continue
 
             # 3. Determine cost of doing Meet LWE.
-            cost_meet = PrimalMeet.cost_meet_lwe(search_space, r, sigma, prob_adm)
+            cost_func = (
+                PrimalMeet.cost_meet_lwe_unbalanced if params.Xs.ones is None
+                else PrimalMeet.cost_meet_lwe
+            )
+            cost_meet = cost_func(search_space, r, sigma, prob_adm)
 
             probability = (
                 prob_hw  # prob. secret splits with given weights. Note: p_HW ~ 1/n roughly
@@ -224,7 +334,7 @@ class PrimalMeet:
 
             # 4. Repeat whole experiment ~1/prob times
             # assert not (not probability or RR(probability).is_NaN())
-            cost = cost.repeat(prob_amplify(0.99, probability))
+            cost = cost.repeat(prob_amplify(succ_prob, probability))
 
             if cost > best_cost:
                 break
@@ -237,6 +347,7 @@ class PrimalMeet:
         cls,
         zeta: int,
         params: LWEParameters,
+        succ_prob: float = 0.99,
         red_shape_model=red_simulator_default,
         red_cost_model=red_cost_model_default,
         log_level=5,
@@ -261,6 +372,7 @@ class PrimalMeet:
             PrimalMeet.cost,
             params,
             zeta=zeta,
+            succ_prob=succ_prob,
             simulator=red_shape_model,
             red_cost_model=red_cost_model,
             **kwds,
@@ -285,6 +397,7 @@ class PrimalMeet:
         cls,
         params: LWEParameters,
         zeta: int = None,
+        succ_prob: float = 0.99,
         red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
         log_level=1,
@@ -300,6 +413,7 @@ class PrimalMeet:
         f = partial(
             cls.cost_zeta,
             params=params,
+            succ_prob=succ_prob,
             red_shape_model=red_shape_model,
             red_cost_model=red_cost_model,
             log_level=log_level + 1,

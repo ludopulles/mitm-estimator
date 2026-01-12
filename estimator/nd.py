@@ -469,7 +469,7 @@ class SparseTernary(NoiseDistribution):
         1
     """
     def __init__(self, hw, ones=None, n=None):
-        self.hamming_weight = int(hw)
+        self._hw = int(hw)
         self.ones = None if ones is None else int(ones)
 
         # Yes, n=0 might happen when estimating the cost of the dual attack! Support size is 1
@@ -478,15 +478,11 @@ class SparseTernary(NoiseDistribution):
             n = 0
 
         mean, bounds = 0, (-1, 1)
-        if ones is None:
-            if ones == hw:
-                bounds[0] = 0
-            if ones == 0:
-                bounds[1] = 0
+        if ones is not None:
+            self.ones = int(ones)
+            bounds = (0 if ones == hw else -1, 0 if ones == 0 else 1)
             if n > 0:
                 mean = (ones - (hw - ones)) / n
-        else:
-            self.ones = int(ones)
 
         density = 0 if n == 0 else RR(hw / n)
         stddev = sqrt(density - mean**2)
@@ -510,6 +506,10 @@ class SparseTernary(NoiseDistribution):
         """
         return SparseTernary(self.hamming_weight, self.ones, new_n)
 
+    @property
+    def hamming_weight(self):
+        return self._hw
+
     def split_balanced(self, new_n, new_hw=None):
         """
         Split the +1 and -1 entries in a balanced way, and return 2 SparseTernary distributions:
@@ -525,7 +525,7 @@ class SparseTernary(NoiseDistribution):
             new_hw = int(QQ(hw * new_n / n).round('down'))
 
         onesL, onesR = None, None
-        if self.ones is None:
+        if self.ones is not None:
             onesL = int((QQ(new_hw * self.ones) / hw).round('down'))
             onesR, self.ones - onesL
         return (
@@ -582,12 +582,12 @@ class SparseTernary(NoiseDistribution):
             T(hw=40, ones=10)
 
         """
-        s = f"(T(hw={self.hamming_weight}"
+        s = f"T(hw={self.hamming_weight}"
         if self.ones is not None:
             s += f", ones={self.ones}"
         if self.n is not None:
             s += f", n={int(self.n)}"
-        return s
+        return s + ")"
 
     def __repr__(self):
         return str(self)
