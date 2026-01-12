@@ -558,8 +558,10 @@ class SparseTernary(NoiseDistribution):
         EXAMPLE::
 
             >>> from estimator import *
+            >>> ND.SparseTernary(8, 64).support_size()
+            1133098334208
             >>> ND.SparseTernary(8, 8, 64).support_size()
-            6287341680214194176
+            4426165368
         """
         n, hw = len(self), self.hamming_weight
         if self.ones is None:

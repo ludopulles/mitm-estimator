@@ -382,7 +382,7 @@ class DualHybrid:
             >>> dual_hybrid(params, mitm_optimization="numerical")
             rop: ≈2^129.0, k: 1, mem: ≈2^131.0, β: 346, m: 1145, d: 2044, ζ: 125, tag: dual_mitm_hybrid
 
-            >>> params = params.updated(Xs=ND.SparseTernary(64))
+            >>> params = params.updated(Xs=ND.SparseTernary(64, 32))
             >>> LWE.dual(params)
             rop: ≈2^103.4, mem: ≈2^63.9, β: 251, m: 904, d: 1928, tag: dual
             >>> dual_hybrid(params)
