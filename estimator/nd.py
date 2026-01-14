@@ -477,14 +477,12 @@ class SparseTernary(NoiseDistribution):
             # Treat it the same as n=0.
             n = 0
 
-        mean, bounds = 0, (-1, 1)
-        if ones is not None:
-            self.ones = int(ones)
-            bounds = (0 if ones == hw else -1, 0 if ones == 0 else 1)
-            if n > 0:
-                mean = (ones - (hw - ones)) / n
-
-        density = 0 if n == 0 else RR(hw / n)
+        mean = (2 * ones - self._hw) / n if ones is not None and n > 0 else 0
+        bounds = (
+            0 if self.ones == self._hw else -1,
+            0 if self.ones == 0 else 1
+        )
+        density = 0 if n == 0 else RR(self._hw / n)
         stddev = sqrt(density - mean**2)
 
         super().__init__(n=n, mean=mean, stddev=stddev, bounds=bounds, _density=density)
@@ -524,13 +522,13 @@ class SparseTernary(NoiseDistribution):
             # Most likely split has same density: new_hw / new_n = hw / n.
             new_hw = int(QQ(hw * new_n / n).round('down'))
 
-        onesL, onesR = None, None
+        ones_l, ones_r = None, None
         if self.ones is not None:
-            onesL = int((QQ(new_hw * self.ones) / hw).round('down'))
-            onesR, self.ones - onesL
+            ones_l = int((QQ(new_hw * self.ones) / hw).round('down'))
+            ones_r = self.ones - ones_l
         return (
-            SparseTernary(new_hw, onesL, new_n),
-            SparseTernary(hw - new_hw, onesR, n - new_n)
+            SparseTernary(new_hw, ones_l, new_n),
+            SparseTernary(hw - new_hw, ones_r, n - new_n)
         )
 
     def split_probability(self, new_n, new_hw=None):
@@ -558,7 +556,7 @@ class SparseTernary(NoiseDistribution):
         EXAMPLE::
 
             >>> from estimator import *
-            >>> ND.SparseTernary(8, 64).support_size()
+            >>> ND.SparseTernary(8, n=64).support_size()
             1133098334208
             >>> ND.SparseTernary(8, 8, 64).support_size()
             4426165368
@@ -582,12 +580,14 @@ class SparseTernary(NoiseDistribution):
             T(hw=40, ones=10, n=100)
             >>> ND.SparseTernary(40, 10)
             T(hw=40, ones=10)
+            >>> ND.SparseTernary(40, 0)
+            T(hw=40, ones=0)
 
         """
         s = f"T(hw={self.hamming_weight}"
         if self.ones is not None:
             s += f", ones={self.ones}"
-        if self.n is not None:
+        if self.n:
             s += f", n={int(self.n)}"
         return s + ")"
 
