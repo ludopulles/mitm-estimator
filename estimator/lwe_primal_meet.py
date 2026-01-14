@@ -56,7 +56,6 @@ class PrimalMeet:
             w1 = w0 + epsilon  # weight at level 1
             w2L, w2R = split_weight(w1)  # weights at level 2: Left and Right
 
-            # Number of ways that we can construct s from s1 + s2.
             if w + epsilon > n:
                 return None
 
@@ -310,11 +309,10 @@ class PrimalMeet:
                 continue
 
             # 3. Determine cost of doing Meet LWE.
-            cost_func = (
-                PrimalMeet.cost_meet_lwe_unbalanced if params.Xs.ones is None
-                else PrimalMeet.cost_meet_lwe
-            )
-            cost_meet = cost_func(search_space, r, sigma, prob_adm)
+            if params.Xs.ones is None:
+                cost_meet = PrimalMeet.cost_meet_lwe_unbalanced(search_space, r, sigma, prob_adm)
+            else:
+                cost_meet = PrimalMeet.cost_meet_lwe(search_space, r, sigma, prob_adm)
 
             probability = (
                 prob_hw  # prob. secret splits with given weights. Note: p_HW ~ 1/n roughly

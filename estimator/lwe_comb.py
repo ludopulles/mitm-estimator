@@ -30,7 +30,7 @@ def log_comb(n, *L):
     assert sum(L) <= n
     res = 0.0
     for x in L:
-        res += logf(RR(binomial(n, x)))
+        res += log(RR(binomial(n, x)))
         n -= x
     return res
 
