@@ -508,6 +508,7 @@ class PrimalHybrid:
         red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
         log_level=5,
+        precise_cost=True,
     ):
         """
         Cost of the hybrid attack.
@@ -526,7 +527,7 @@ class PrimalHybrid:
         """
         simulator = simulator_normalize(red_shape_model)
 
-        if params.Xs.is_sparse and zeta > 0:
+        if precise_cost and params.Xs.is_sparse and zeta > 0:
             best_cost, hw = Cost(rop=oo), 0
             while hw <= min(params.Xs.hamming_weight, zeta):
                 cost = PrimalHybrid.cost_precise(
@@ -653,6 +654,7 @@ class PrimalHybrid:
         mitm: bool = True,
         optimize_d=True,
         log_level=5,
+        precise_cost=True,
         **kwds,
     ):
         """
@@ -679,6 +681,7 @@ class PrimalHybrid:
             red_shape_model=red_shape_model,
             red_cost_model=red_cost_model,
             m=m,
+            precise_cost=precise_cost,
             **kwds,
         )
 
@@ -721,6 +724,7 @@ class PrimalHybrid:
         red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
         log_level=1,
+        precise_cost=True,
         **kwds,
     ):
         """
@@ -802,6 +806,7 @@ class PrimalHybrid:
             mitm=mitm,
             m=m,
             log_level=log_level + 1,
+            precise_cost=precise_cost,
         )
 
         if zeta is None:
