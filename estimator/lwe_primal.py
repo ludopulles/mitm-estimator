@@ -426,12 +426,7 @@ class PrimalHybrid:
             guess, subparams.Xs = params.Xs.split_balanced(zeta, h_)
 
         # 1. Simulate BKZ-β
-        xi = (
-            1 if RR(subparams.Xs.stddev) == RR(0)
-            else PrimalUSVP._xi_factor(subparams.Xs, params.Xe)
-        )
-        # xi2 = PrimalUSVP._xi_factor(params.Xs, params.Xe)
-        # print(f"Difference between xi values: {xi:.3f} vs {xi2:.3f}")
+        xi = 1 if RR(subparams.Xs.stddev) == RR(0) else PrimalUSVP._xi_factor(subparams.Xs, params.Xe)
 
         tau = False if params._homogeneous else params.Xe.stddev
         m = min(params.m, ceil(sqrt(subparams.n * log(params.q) / log(deltaf(beta)))) - subparams.n)
@@ -459,29 +454,23 @@ class PrimalHybrid:
             svp_cost["rop"] += PrimalHybrid.babai_cost(d - eta)["rop"]
 
         # 3. Search
-        # We need to do one BDD call at least
-        num_guesses, p_hw = 0, RR(0.0)
+        base = params.Xs.bounds[1] - params.Xs.bounds[0]  # e.g. (-1, 1) -> two nonzero values
+        num_guesses = guess.support_size() if params.Xs.is_sparse else binomial(zeta, h_) * base**h_
+        # p_HW:
+        p = RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=h_))
 
         # TODO: this is rather clumsy as a model
-        ssf = (lambda x: RR(x**.5)) if mitm else (lambda x: x)  # search space size
-
-        if params.Xs.is_sparse:
-            num_guesses = guess.support_size()
-            # p_hw = sum(RR(params.Xs.split_probability(zeta, hw)) for hw in range(h_ + 1))
-            # p_hw = sum(RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=hw)) for hw in range(h_+1))
-            p_hw = RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=h_))
-            svp_cost = svp_cost.repeat(ssf(num_guesses))
-        else:
-            base = params.Xs.bounds[1] - params.Xs.bounds[0]  # e.g. (-1, 1) -> two nonzero values
-            num_guesses = binomial(zeta, h_) * base**h_
-            p_hw = RR(prob_drop(params.n, params.Xs.hamming_weight, zeta, fail=h_))
-            svp_cost = svp_cost.repeat(ssf(num_guesses))
+        svp_cost = svp_cost.repeat(RR(sqrt(num_guesses) if mitm else num_guesses))
 
         if mitm:
             assert babai is True  # TODO: analyze probability when not using Babai NP.
-            p_hw *= mitm_babai_probability(r, params.Xe.stddev)
+            # p_adm:
+            p *= mitm_babai_probability(r, params.Xe.stddev)
 
-        p = p_hw  # RR(p_hw * prob_babai(r, sqrt(d) * params.Xe.stddev))
+        if eta <= 20 and d >= 0:
+            # p_NP:
+            # NOTE: η: somewhat arbitrary bound, d: we may guess it all
+            p *= RR(prob_babai(r, sqrt(d) * params.Xe.stddev))
 
         cost = Cost({
             "rop": bkz_cost["rop"] + svp_cost["rop"],
