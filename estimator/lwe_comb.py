@@ -158,9 +158,9 @@ class MeetREP0:
         # params = LWEParameters.normalize(params)
 
         # Check for ternary instead of sparse ternary.
-        assert type(params.Xs) is SparseTernary, "Secret distribution has to be ternary."
-        assert 2 * params.Xs.ones == params.Xs.hamming_weight
-        assert params.Xs.mean == 0, "Expected #1's == #-1's."
+        assert isinstance(params.Xs, SparseTernary), "Secret distribution has to be ternary."
+        assert params.Xs.ones is not None, "Expected #1's == #-1's."
+        assert 2 * params.Xs.ones == params.Xs._hw, "Expected #1's == #-1's."
         assert params.Xe.is_bounded, "Error distribution has to be bounded."
 
         n, logq = params.n, RR(log(params.q))

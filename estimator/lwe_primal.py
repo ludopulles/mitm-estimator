@@ -497,7 +497,7 @@ class PrimalHybrid:
         red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
         log_level=5,
-        precise_cost=True,
+        precise_cost=False,
     ):
         """
         Cost of the hybrid attack.
@@ -643,7 +643,7 @@ class PrimalHybrid:
         mitm: bool = True,
         optimize_d=True,
         log_level=5,
-        precise_cost=True,
+        precise_cost=False,
         **kwds,
     ):
         """
@@ -713,7 +713,7 @@ class PrimalHybrid:
         red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
         log_level=1,
-        precise_cost=True,
+        precise_cost=False,
         **kwds,
     ):
         """
@@ -749,13 +749,13 @@ class PrimalHybrid:
             >>> from estimator import *
             >>> params = schemes.Kyber512.updated(Xs=ND.SparseTernary(32, 16))
             >>> LWE.primal_hybrid(params, mitm=False, babai=False)
-            rop: ≈2^90.8, red: ≈2^89.8, svp: ≈2^89.8, β: 161, η: 18, ζ: 287, |S|: ≈2^56.0, d: 50...
+            rop: ≈2^89.3, red: ≈2^88.8, svp: ≈2^87.7, β: 106, η: 18, ζ: 321, |S|: ≈2^39.7, d: 36...
 
             >>> LWE.primal_hybrid(params, mitm=False, babai=True)
-            rop: ≈2^43.1, red: ≈2^43.1, svp: ≈2^19.3, β: 40, η: 2, ζ: 1, |S|: 1, d: 569, prob: 0...
+            rop: ≈2^88.4, red: ≈2^87.8, svp: ≈2^86.9, β: 98, η: 2, ζ: 321, |S|: ≈2^39.7, d: 347,...
 
             >>> LWE.primal_hybrid(params, mitm=True, babai=True)
-            rop: ≈2^87.1, red: ≈2^85.1, svp: ≈2^86.6, β: 117, η: 2, ζ: 367, |S|: ≈2^94.3, d: 373...
+            rop: ≈2^85.5, red: ≈2^84.5, svp: ≈2^84.5, β: 105, η: 2, ζ: 364, |S|: ≈2^85.0, d: 316...
 
         TESTS:
 
