@@ -16,7 +16,7 @@ from .conf import red_simulator as red_simulator_default
 from .cost import Cost
 from .io import Logging
 from .lwe_comb import log_comb, split_weight, sum_log
-from .lwe_parameters import LWEParameters
+from .lwe_parameters import LWEParameters, ModuleLWEParameters
 from .lwe_primal import primal_usvp, PrimalUSVP, PrimalHybrid
 from .nd import SparseTernary
 from .prob import babai_gaussian, mitm_babai_probability, amplify as prob_amplify
@@ -301,6 +301,14 @@ class PrimalMeet:
         while hw <= min(h, zeta):
             search_space = params.Xs.split_balanced(zeta, hw)[0]
             prob_hw = params.Xs.split_probability(zeta, hw)
+            meet_reps = 1  # How many times can we perform MEET, after running BKZ once?
+
+            if type(params) is ModuleLWEParameters:
+                # assume all rotations of `s` are independent:
+                prob_hw = 1.0 - (1.0 - prob_hw)**params.ringdeg
+                meet_reps = params.ringdeg
+                # Effectively, we only have to run BKZ once for `ringdeg` ('independent') iterations.
+
             if prob_hw < 2**-20:
                 # Very unlikely in this attack that the secret splits in this way.
                 # The best attack has very small T/p (T = runtime, p = success probability)
@@ -322,7 +330,7 @@ class PrimalMeet:
             )
 
             cost = Cost({
-                "rop": cost_bkz + cost_meet["rop"], "red": cost_bkz,
+                "rop": cost_bkz + meet_reps * cost_meet["rop"], "red": cost_bkz,
                 "mem": cost_meet["mem"],
                 "beta": beta, "zeta": zeta, "d": d,
                 "h_": hw, "h_1": cost_meet["h_1"], "h_2": cost_meet["h_2"],
