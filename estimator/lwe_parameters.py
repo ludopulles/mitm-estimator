@@ -169,3 +169,37 @@ class LWEParameters:
 
     def __hash__(self):
         return hash((self.n, self.q, self.Xs, self.Xe, self.m, self.tag))
+
+
+@dataclass
+class ModuleLWEParameters(LWEParameters):
+    """The parameters for a Learning With Errors problem instance, using module structure."""
+
+    ringdeg: int = 1  #: use module structure using ring R = Z[X] / (X^{ringdeg} + 1), for `ringdeg` a power of two.
+    rank: int = 1  #: rank of the R-module
+
+    def __init__(self, ringdeg: int, rank: int, q, Xs: NoiseDistribution, Xe: NoiseDistribution,
+                 m: int = oo, tag: str = None):
+        assert (self.ringdeg & (self.ringdeg - 1)) == 0, "`ringdeg` must be a power of two"
+        self.ringdeg = ringdeg
+        self.rank = rank
+        super().__init__(self.ringdeg * self.rank, q, Xs, Xe, m, tag)
+
+    def __hash__(self):
+        return hash((super().__hash__(), self.ringdeg, self.rank))
+
+    def unstructured(self):
+        """
+        Return the unstructured LWEParameters, forgetting the module structure.
+        """
+        return LWEParameters(self.n, self.q, self.Xs, self.Xe, self.m, self.tag)
+
+    def updated(self, **kwds):
+        """
+        Return a new set of (unstructured parameters) updated according to ``kwds``.
+        """
+        return self.unstructured().updated(**kwds)
+
+def RingLWEParameters(n: int, q, Xs: NoiseDistribution, Xe: NoiseDistribution, m: int = oo, tag: str = None):
+    """Return parameters for a Learning With Errors problem instance, using ring structure."""
+    return ModuleLWEParameters(n, 1, q, Xs, Xe, m, tag)
