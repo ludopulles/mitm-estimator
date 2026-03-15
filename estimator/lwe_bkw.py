@@ -272,7 +272,7 @@ class CodedBKW:
             >>> from sage.all import oo
             >>> from estimator import *
             >>> schemes.Kyber512
-            LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512')
+            ModuleLWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512', ringdeg=256, rank=2)
             >>> cost = LWE.coded_bkw(schemes.Kyber512); cost
             rop: ≈2^178.8, m: ≈2^166.8, mem: ≈2^167.8, b: 14, t1: 0, t2: 16, ℓ: 13, #cod: 448, #top: 0, #test: 64, ...
             >>> cost["problem"]

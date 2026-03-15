@@ -35,7 +35,7 @@ Usage examples:
     
     >>> from estimator import *
     >>> schemes.Kyber512
-    LWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512')
+    ModuleLWEParameters(n=512, q=3329, Xs=D(σ=1.22), Xe=D(σ=1.22), m=512, tag='Kyber 512', ringdeg=256, rank=2)
 
     >>> LWE.primal_usvp(schemes.Kyber512)
     rop: ≈2^143.8, red: ≈2^143.8, δ: 1.003941, β: 406, d: 998, tag: usvp
@@ -47,7 +47,8 @@ Usage examples:
     >>> r = LWE.estimate(schemes.Kyber512)
     bkw                  :: rop: ≈2^178.8, m: ≈2^166.8, mem: ≈2^167.8, b: 14, t1: 0, t2: 16, ℓ: 13, #cod: 448, #top: 0, #test: 64, tag: coded-bkw
     usvp                 :: rop: ≈2^143.8, red: ≈2^143.8, δ: 1.003941, β: 406, d: 998, tag: usvp
-    bdd                  :: rop: ≈2^140.2, red: ≈2^139.1, svp: ≈2^139.3, β: 389, η: 422, d: 1005, tag: bdd
+    bdd                  :: rop: ≈2^144.2, red: ≈2^143.2, svp: ≈2^143.1, β: 404, η: 407, d: 996, tag: bdd
+    bdd_hybrid           :: rop: ≈2^143.4, red: ≈2^142.4, svp: ≈2^142.3, β: 401, η: 404, ζ: 3, |S|: 1, d: 1021, prob: 1.000, h': 0, tag: hybrid
     dual                 :: rop: ≈2^149.9, mem: ≈2^97.1, β: 424, m: 512, d: 1024, tag: dual
     dual_hybrid          :: rop: ≈2^139.7, red: ≈2^139.5, guess: ≈2^135.9, β: 387, p: 5, ζ: 0, t: 50, β': 391, N: ≈2^81.1, m: 512
 
