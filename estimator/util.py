@@ -185,20 +185,6 @@ class local_minimum_base:
         return self._best.high
 
     def update(self, res):
-        """
-
-        TESTS:
-
-        We keep cache old inputs in ``_all_x`` to prevent infinite loops::
-
-            >>> from estimator.util import binary_search
-            >>> from estimator.cost import Cost
-            >>> f = lambda x, log_level=1: Cost(rop=1) if x >= 19 else Cost(rop=2)
-            >>> binary_search(f, 10, 30, "x")
-            rop: 1
-
-        """
-
         Logging.log("bins", self._log_level, f"({self._last_x}, {repr(res)})")
 
         self._all_x.add(self._last_x)

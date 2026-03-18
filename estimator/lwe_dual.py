@@ -413,11 +413,11 @@ class DualHybrid:
             # small n examples (Issue #178)
             >>> params = LWE.Parameters(n=8, q=2**128, Xs=ND.UniformMod(2**128), Xe=ND.UniformMod(2**124))
             >>> LWE.dual(params)
-            rop: ≈2^105.9, mem: ≈2^65.6, m: 371, β: 275, d: 379, ↻: 1, tag: dual
+            rop: ≈2^105.9, mem: ≈2^65.6, β: 275, m: 371, d: 379, tag: dual
             >>> dual_hybrid(params)
-            rop: ≈2^104.5, mem: ≈2^64.5, m: 363, β: 270, d: 371, ↻: 1, ζ: 0, tag: dual_hybrid
+            rop: ≈2^104.5, mem: ≈2^64.5, β: 270, m: 363, d: 371, ζ: 0, tag: dual_hybrid
             >>> dual_hybrid(params, fft=True)
-            rop: ≈2^103.7, mem: ≈2^64.1, m: 361, t: 7, β: 267, d: 369, ↻: 1, ζ: 0, tag: dual_hybrid
+            rop: ≈2^103.7, mem: ≈2^64.1, t: 7, β: 267, m: 361, d: 369, ζ: 0, tag: dual_hybrid
         """
         Logging.log("dual", log_level, f"costing LWE instance: {repr(params)}")
 
