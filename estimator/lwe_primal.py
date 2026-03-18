@@ -7,9 +7,11 @@ See :ref:`LWE Primal Attacks` for an introduction what is available.
 """
 from functools import partial
 from sage.all import oo, ceil, sqrt, log, RR, ZZ, binomial, cached_function
+from scipy.optimize import minimize_scalar
+
 from .reduction import delta as deltaf
 from .reduction import cost as costf
-from .util import local_minimum
+from .util import local_minimum, binary_search
 from .cost import Cost
 from .lwe_parameters import LWEParameters, ModuleLWEParameters
 from .simulator import normalize as simulator_normalize
@@ -22,7 +24,6 @@ from .io import Logging
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
 from .conf import max_beta as max_beta_global
-from scipy.optimize import minimize_scalar
 
 
 class PrimalUSVP:
@@ -922,53 +923,31 @@ class PrimalHybrid:
         )
 
         if zeta is None:
+            f = partial(f, optimize_d=False, **kwds)
+
             # primal_hybrid cost is generally parabolic with zeta.
             # We find a range [min_zeta, max_zeta] such that cost is finite over the entire interval.
+            min_zeta, max_zeta = 0, params.n - 1
 
-            # we search for min_zeta such that cost(min_zeta) is finite, but cost(min_zeta - 1) is infinite.
-            cost_min_zeta = f(zeta=0, optimize_d=False, **kwds)
-            if cost_min_zeta["rop"] < oo:
-                min_zeta = 0
-            else:
-                min_zeta_lower = 0
-                min_zeta_upper = params.n - 1
-                min_zeta = (min_zeta_upper + min_zeta_lower) // 2
-                while min_zeta_upper - min_zeta_lower > 1:
-                    cost_min_zeta = f(min_zeta, optimize_d=False, **kwds)
-                    if cost_min_zeta["rop"] < oo:
-                        min_zeta_upper = min_zeta
-                    else:
-                        min_zeta_lower = min_zeta
-                    min_zeta = (min_zeta_upper + min_zeta_lower) // 2
+            # we search for min_zeta such that cost(min_zeta) is finite and cost(min_zeta - 1) is infinite.
+            cost_min_zeta = f(min_zeta)
+            if cost_min_zeta["rop"] == oo:
+                min_zeta = binary_search(lambda z: f(z)["rop"] < oo, min_zeta, max_zeta)
 
-            # we search for max_zeta such that cost(max_zeta) is finite, but cost(max_zeta + 1) is infinite.
-            cost_max_zeta = f(zeta=params.n-1, optimize_d=False, **kwds)
-            if cost_max_zeta["rop"] < oo:
-                max_zeta = params.n - 1
-            else:
-                max_zeta_lower = 0
-                max_zeta_upper = params.n - 1
-                max_zeta = (max_zeta_upper + max_zeta_lower) // 2
-                while max_zeta_upper - max_zeta_lower > 1:
-                    cost_max_zeta = f(max_zeta, optimize_d=False, **kwds)
-                    if cost_max_zeta["rop"] < oo:
-                        max_zeta_lower = max_zeta
-                    else:
-                        max_zeta_upper = max_zeta
-                    max_zeta = (max_zeta_upper + max_zeta_lower) // 2
+            # we search for max_zeta such that cost(max_zeta) is finite and cost(max_zeta + 1) is infinite.
+            cost_max_zeta = f(max_zeta)
+            if cost_max_zeta["rop"] == oo:
+                max_zeta = binary_search(lambda z: f(z)["rop"] == oo, min_zeta, max_zeta) - 1
 
-            ret = minimize_scalar(lambda x: log(f(zeta=round(x), optimize_d=False,
-                                                  **kwds)["rop"]), bounds=(min_zeta, max_zeta), method="bounded")
-
+            ret = minimize_scalar(lambda x: log(f(round(x))["rop"]), bounds=(min_zeta, max_zeta), method="bounded")
             zeta = int(ret.x)
-            cost = f(zeta=zeta, optimize_d=False, **kwds)
+
+            # minimize_scalar fits to a parabola. This can cause this search to miss minima at extrema
+            cost = min(cost_min_zeta, f(zeta), cost_max_zeta)
             # check a small neighborhood of this zeta
             precision = 3
-            for zeta in range(max(0, zeta - precision), min(params.n, zeta + precision) + 1):
-                cost = min(cost, f(zeta=zeta, optimize_d=False, **kwds))
-            # minimize_scalar fits to a parabola. This can cause this search to miss minima at extrema
-            cost = min(cost, cost_min_zeta, cost_max_zeta)
-
+            for zeta_ in range(max(min_zeta + 1, zeta - precision), min(max_zeta, zeta + precision + 1)):
+                cost = min(cost, f(zeta_))
         else:
             cost = f(zeta=zeta)
 

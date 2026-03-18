@@ -386,31 +386,24 @@ class early_abort_range:
             self._next_x = None
 
 
-def binary_search(
-    f, start, stop, param, step=1, smallerf=lambda x, best: x <= best, log_level=5, *args, **kwds
-):
+def binary_search(f, start: int, stop: int):
     """
-    Searches for the best value in the interval [start,stop] depending on the given comparison function.
+    return the smallest `i \\in {start, ..., stop}` such that f(i) = True, assuming:
+
+    - f is of the form {False, ..., False, True, ..., True},
+    - f(start) = False, and
+    - f(stop) = True,
 
     :param start: start of range to search (inclusive)
     :param stop: stop of range to search (inclusive)
-    :param param: the parameter to modify when calling `f`
-    :param smallerf: comparison is performed by evaluating ``smallerf(current, best)``
-    :param step: initially only consider every `step`-th value
     """
-
-    with local_minimum(start, stop + 1, step, smallerf=smallerf, log_level=log_level) as it:
-        for x in it:
-            kwds_ = dict(kwds)
-            kwds_[param] = x
-            it.update(f(*args, **kwds_))
-
-        for x in it.neighborhood:
-            kwds_ = dict(kwds)
-            kwds_[param] = x
-            it.update(f(*args, **kwds_))
-
-        return it.y
+    while stop > start + 1:
+        mid = (stop + start) // 2
+        if f(mid):
+            stop = mid
+        else:
+            start = mid
+    return stop
 
 
 def _batch_estimatef(f, x, log_level=0, f_repr=None, catch_exceptions=True):

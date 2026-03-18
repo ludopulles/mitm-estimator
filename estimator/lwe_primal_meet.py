@@ -12,7 +12,7 @@ from sage.all import oo, cached_function, ceil, exp, floor, log, pi, RR, sqrt
 
 from .conf import red_cost_model as red_cost_model_default
 from .conf import red_shape_model as red_shape_model_default
-from .conf import red_simulator as red_simulator_default
+from .conf import max_beta as max_beta_global
 from .cost import Cost
 from .io import Logging
 from .lwe_comb import log_comb, split_weight, sum_log
@@ -22,7 +22,7 @@ from .nd import SparseTernary
 from .prob import babai_gaussian, mitm_babai_probability, amplify as prob_amplify
 from .reduction import cost as costf, delta as deltaf
 from .simulator import normalize as simulator_normalize
-from .util import local_minimum
+from .util import local_minimum, binary_search
 
 
 class PrimalMeet:
@@ -255,7 +255,7 @@ class PrimalMeet:
         beta: int,
         zeta: int,
         succ_prob: float = 0.99,
-        simulator=red_simulator_default,
+        red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
     ):
         """
@@ -286,6 +286,7 @@ class PrimalMeet:
         if log_last_GS_norm < 10 * sigma:
             # Lattice reduction should be sufficiently strong such that p_adm is of value >0.1 or so (e.g. 0.5).
             return Cost(rop=oo)
+        simulator = simulator_normalize(red_shape_model)
         r = simulator(d, n, params.q, beta, xi=xi, tau=None, dual=True)
 
         cost_bkz = RR(costf(red_cost_model, beta, d)["rop"])
@@ -354,7 +355,7 @@ class PrimalMeet:
         zeta: int,
         params: LWEParameters,
         succ_prob: float = 0.99,
-        red_shape_model=red_simulator_default,
+        red_shape_model=red_shape_model_default,
         red_cost_model=red_cost_model_default,
         log_level=5,
         **kwds,
@@ -373,22 +374,27 @@ class PrimalMeet:
             **kwds,
         )
         Logging.log("bdd", log_level, f"H0: {repr(baseline_cost)}")
-        if baseline_cost["rop"] == oo:
-            return baseline_cost
 
         f = partial(
             PrimalMeet.cost,
             params,
             zeta=zeta,
             succ_prob=succ_prob,
-            simulator=red_shape_model,
+            red_shape_model=red_shape_model,
             red_cost_model=red_cost_model,
             **kwds,
         )
 
+        if baseline_cost["rop"] == oo:
+            # these parameters mean usvp does not succeed for any beta < max_beta_global,
+            # so we search over the full beta range
+            max_beta = max_beta_global
+        else:
+            max_beta = baseline_cost["beta"]
+
         # step 1. optimize β
         with local_minimum(
-            40, baseline_cost["beta"] + 1, precision=2, log_level=log_level + 1
+            40, max_beta + 1, precision=2, log_level=log_level + 1
         ) as it:
             for beta in it:
                 it.update(f(beta))
@@ -415,7 +421,6 @@ class PrimalMeet:
         Estimate cost of solving LWE via a hybrid of primal attack and Meet-LWE [HKLS22].
         """
         params = LWEParameters.normalize(params)
-        red_shape_model = simulator_normalize(red_shape_model)
         Cost.register_impermanent(h_1=False, h_2=False, d_=False, epsilon=False)
 
         f = partial(
@@ -428,13 +433,28 @@ class PrimalMeet:
         )
 
         if zeta is None:
-            cost = Cost(rop=oo)
-            with local_minimum(0, params.n, precision=2, log_level=log_level) as it:
+            f = partial(f, **kwds)
+
+            # primal_hybrid cost is generally parabolic with zeta.
+            # We find a range [min_zeta, max_zeta) such that cost is finite over the entire interval.
+            min_zeta, max_zeta = 0, params.n
+
+            # we search for min_zeta such that cost(min_zeta) is finite and cost(min_zeta - 1) is infinite.
+            cost_min_zeta = f(min_zeta)
+            if cost_min_zeta["rop"] == oo:
+                min_zeta = binary_search(lambda z: f(z)["rop"] < oo, min_zeta, max_zeta)
+
+            # we search for max_zeta such that cost(max_zeta - 1) is finite and cost(max_zeta) is infinite.
+            cost_max_zeta = f(max_zeta)
+            if cost_max_zeta["rop"] < oo:
+                max_zeta = binary_search(lambda z: f(z)["rop"] == oo, min_zeta, max_zeta)
+
+            with local_minimum(min_zeta, max_zeta, precision=2, log_level=log_level) as it:
                 for zeta_ in it:
-                    it.update(f(zeta=zeta_, **kwds))
-                cost = it.y
+                    it.update(f(zeta_))
+                cost = min(cost_min_zeta, it.y, cost_max_zeta)
         else:
-            cost = f(zeta=zeta)
+            cost = f(zeta)
 
         cost["tag"] = "primal-meet-hybrid"
         cost["problem"] = params
