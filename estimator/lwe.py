@@ -15,7 +15,7 @@ from .lwe_comb import odlyzko, meet_rep0, meet_rep1
 from .lwe_primal_meet import primal_meet
 from .nd import SparseTernary
 from .gb import arora_gb  # noqa
-from .lwe_parameters import LWEParameters as Parameters  # noqa
+from .lwe_parameters import LWEParameters as Parameters, RingLWEParameters as RingParameters  # noqa
 from .conf import (
     red_cost_model as red_cost_model_default,
     red_shape_model as red_shape_model_default,

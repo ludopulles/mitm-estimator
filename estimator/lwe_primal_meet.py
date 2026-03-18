@@ -373,6 +373,8 @@ class PrimalMeet:
             **kwds,
         )
         Logging.log("bdd", log_level, f"H0: {repr(baseline_cost)}")
+        if baseline_cost["rop"] == oo:
+            return baseline_cost
 
         f = partial(
             PrimalMeet.cost,

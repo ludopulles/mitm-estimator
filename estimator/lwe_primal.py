@@ -262,6 +262,8 @@ class PrimalUSVP:
             red_shape_model="gsa",
         )
         Logging.log("usvp", log_level + 1, f"GSA: {repr(cost_gsa)}")
+        if cost_gsa["rop"] == oo:
+            return cost_gsa
 
         f = partial(
             self.cost_simulator,
